@@ -1,0 +1,32 @@
+{
+  "name": "MTG Timer & Control System",
+  "short_name": "MTG Timer",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#111827",
+  "theme_color": "#111827",
+  "description": "Timer para Magic: The Gathering con panel de control y slider offline.",
+  "icons": [
+    {
+      "src": "/logoboards.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Abrir Timer",
+      "short_name": "Timer",
+      "url": "/",
+      "icons": [{ "src": "/logoboards.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "Panel de Control",
+      "short_name": "Control",
+      "url": "/control",
+      "icons": [{ "src": "/logoboards.png", "sizes": "192x192", "type": "image/png" }]
+    }
+  ]
+}

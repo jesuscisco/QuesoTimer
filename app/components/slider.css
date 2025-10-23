@@ -1,0 +1,582 @@
+@font-face {
+  src: url('https://s3-us-west-2.amazonaws.com/s.cdpn.io/142996/TESLA.ttf');
+  font-family: Tesla;
+  font-display: swap;
+}
+
+@font-face {
+  src: url('https://s3-us-west-2.amazonaws.com/s.cdpn.io/142996/PFDinTextCompPro-Medium.ttf');
+  font-family: pfd-medium;
+  font-display: swap;
+}
+
+/* Variables CSS en lugar de SASS */
+:root {
+  --rt: 1.5s; /* Removing transition time */
+  --rtdelay: 0.3s; /* Removing transition delay */
+  --bg-t: 1s; /* Active background zoom transition */
+  --total-t: 3.8s; /* Total effects transition */
+}
+
+.slider {
+  position: relative;
+  height: 100%;
+}
+
+.slider--control {
+  z-index: 50;
+  position: absolute;
+  top: calc(50% - 1.4rem);
+  z-index: 0;
+  width: 1.7rem;
+  height: 2.8rem;
+  cursor: pointer;
+}
+
+.slider--control.left {
+  left: 3rem;
+}
+
+.slider--control.right {
+  right: 3rem;
+}
+
+.slider--control:after {
+  content: "";
+  position: absolute;
+  display: block;
+  top: -0.6rem;
+  left: -1.15rem;
+  width: 4rem;
+  height: 4rem;
+  background: rgba(255,255,255,0.5);
+  border-radius: 50%;
+}
+
+.slider--el {
+  z-index: 1;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  transition: transform var(--total-t), z-index 0.1s;
+  overflow: hidden;
+  display: none;
+}
+
+.slider--el.active {
+  z-index: 10;
+  display: block;
+}
+
+.slider--el.active .slider--el-bg {
+  transform: scale(0.834);
+}
+
+.slider--el.active .slider--el-content {
+  opacity: 1;
+}
+
+.slider--el.next {
+  z-index: 5;
+  display: block;
+}
+
+.slider--el.next .slider--el-bg {
+  transform: scale(0.834);
+}
+
+/* Primera slide debe estar visible por defecto */
+.slider--el-1 {
+  display: block;
+}
+
+.slider--el-bg {
+  position: absolute;
+  top: -10%;
+  left: -10%;
+  width: 120%;
+  height: 120%;
+  background-size: cover;
+  transition: transform var(--bg-t) 1s;
+  will-change: transform;
+}
+
+/* Blurred cover background layer behind parts to fill container */
+.slider--el-bg::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  filter: blur(12px) brightness(0.65);
+  transform: scale(1.1);
+  z-index: 0;
+  /* Default off; enabled per state below */
+  opacity: 0;
+  transition: opacity var(--rt) var(--rtdelay);
+}
+
+/* Show blur only for current (active) and incoming (next) slides */
+.slider--el.active .slider--el-bg::before,
+.slider--el.next .slider--el-bg::before {
+  opacity: 1;
+}
+
+/* Ensure removed slide's blur fades out in sync with parts */
+.slider--el.removed .slider--el-bg::before {
+  opacity: 0;
+}
+
+/* Allow turning off the blurred background via class on the root slider */
+.no-blur .slider--el-bg::before {
+  opacity: 0 !important;
+}
+
+.slider--el-bg .part:after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.15);
+}
+
+.slider--el-content {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  padding: 4rem;
+  transition: opacity var(--rtdelay);
+  opacity: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+}
+
+.slider--el-heading {
+  font-size: 4rem;
+  font-family: Tesla, 'Arial Black', sans-serif;
+  text-transform: uppercase;
+  color: #fff;
+  text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+  margin-bottom: 1rem;
+}
+
+.slider--el.removed .slider--el-content {
+  opacity: 0;
+}
+
+/* ===== Animación 5 partes ===== */
+.slider--el.anim-5parts .part {
+  position: absolute;
+  top: 0;
+  width: 20.1%;
+  height: 100%;
+  overflow: hidden;
+  will-change: transform;
+}
+
+.slider--el.anim-5parts .part:before {
+  content: "";
+  display: block;
+  position: absolute;
+  top: 0;
+  width: 500%;
+  height: 100%;
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+}
+
+.slider--el.anim-5parts .part.part-1 {
+  left: 0%;
+  transition: transform calc(var(--rt) - 0.4s) var(--rtdelay);
+}
+
+.slider--el.anim-5parts .part.part-1:before {
+  left: 0%;
+}
+
+.slider--el.anim-5parts .part.part-2 {
+  left: 20%;
+  transition: transform calc(var(--rt) - 0.4s) calc(var(--rtdelay) + 0.2s);
+}
+
+.slider--el.anim-5parts .part.part-2:before {
+  left: -100%;
+}
+
+.slider--el.anim-5parts .part.part-3 {
+  left: 40%;
+  transition: transform calc(var(--rt) - 0.4s) calc(var(--rtdelay) + 0.4s);
+}
+
+.slider--el.anim-5parts .part.part-3:before {
+  left: -200%;
+}
+
+.slider--el.anim-5parts .part.part-4 {
+  left: 60%;
+  transition: transform calc(var(--rt) - 0.4s) calc(var(--rtdelay) + 0.2s);
+}
+
+.slider--el.anim-5parts .part.part-4:before {
+  left: -300%;
+}
+
+.slider--el.anim-5parts .part.part-5 {
+  left: 80%;
+  transition: transform calc(var(--rt) - 0.4s) var(--rtdelay);
+}
+
+.slider--el.anim-5parts .part.part-5:before {
+  left: -400%;
+}
+
+.slider--el.anim-5parts.removed .part {
+  transform: translateY(100%);
+}
+
+/* ===== Animación 9 partes ===== */
+.slider--el.anim-9parts .slider--el-bg {
+  perspective: 2000px;
+}
+
+.slider--el.anim-9parts .part {
+  position: absolute;
+  width: 33.5%;
+  height: 33.5%;
+  overflow: hidden;
+  will-change: transform;
+  transform-origin: 0% 100%;
+}
+
+.slider--el.anim-9parts .part:before {
+  content: "";
+  display: block;
+  position: absolute;
+  width: 300%;
+  height: 300%;
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+}
+
+.slider--el.anim-9parts .part.left-top {
+  top: 0%;
+  left: 0%;
+  transition: transform 0.9s calc(0.2s + var(--rtdelay)) cubic-bezier(.58,-0.7,.59,.95), 
+              opacity 0.6s calc(0.2s + 0.33s + 0.1s + var(--rtdelay));
+}
+
+.slider--el.anim-9parts .part.left-top:before {
+  top: 0%;
+  left: 0%;
+}
+
+.slider--el.anim-9parts .part.mid-top {
+  top: 0%;
+  left: 33.33%;
+  transition: transform 0.9s calc(0.1s + var(--rtdelay)) cubic-bezier(.58,-0.7,.59,.95), 
+              opacity 0.6s calc(0.1s + 0.33s + 0.1s + var(--rtdelay));
+}
+
+.slider--el.anim-9parts .part.mid-top:before {
+  top: 0%;
+  left: -100%;
+}
+
+.slider--el.anim-9parts .part.right-top {
+  top: 0%;
+  left: 66.66%;
+  transition: transform 0.9s calc(0.2s + var(--rtdelay)) cubic-bezier(.58,-0.7,.59,.95), 
+              opacity 0.6s calc(0.2s + 0.33s + 0.1s + var(--rtdelay));
+}
+
+.slider--el.anim-9parts .part.right-top:before {
+  top: 0%;
+  left: -200%;
+}
+
+.slider--el.anim-9parts .part.left-mid {
+  top: 33.33%;
+  left: 0%;
+  transition: transform 0.9s calc(0.3s + var(--rtdelay)) cubic-bezier(.58,-0.7,.59,.95), 
+              opacity 0.6s calc(0.3s + 0.33s + 0.1s + var(--rtdelay));
+}
+
+.slider--el.anim-9parts .part.left-mid:before {
+  top: -100%;
+  left: 0%;
+}
+
+.slider--el.anim-9parts .part.mid-mid {
+  top: 33.33%;
+  left: 33.33%;
+  transition: transform 0.9s calc(0s + var(--rtdelay)) cubic-bezier(.58,-0.7,.59,.95), 
+              opacity 0.6s calc(0s + 0.33s + 0.1s + var(--rtdelay));
+}
+
+.slider--el.anim-9parts .part.mid-mid:before {
+  top: -100%;
+  left: -100%;
+}
+
+.slider--el.anim-9parts .part.right-mid {
+  top: 33.33%;
+  left: 66.66%;
+  transition: transform 0.9s calc(0.3s + var(--rtdelay)) cubic-bezier(.58,-0.7,.59,.95), 
+              opacity 0.6s calc(0.3s + 0.33s + 0.1s + var(--rtdelay));
+}
+
+.slider--el.anim-9parts .part.right-mid:before {
+  top: -100%;
+  left: -200%;
+}
+
+.slider--el.anim-9parts .part.left-bot {
+  top: 66.66%;
+  left: 0%;
+  transition: transform 0.9s calc(0.4s + var(--rtdelay)) cubic-bezier(.58,-0.7,.59,.95), 
+              opacity 0.6s calc(0.4s + 0.33s + 0.1s + var(--rtdelay));
+}
+
+.slider--el.anim-9parts .part.left-bot:before {
+  top: -200%;
+  left: 0%;
+}
+
+.slider--el.anim-9parts .part.mid-bot {
+  top: 66.66%;
+  left: 33.33%;
+  transition: transform 0.9s calc(0.5s + var(--rtdelay)) cubic-bezier(.58,-0.7,.59,.95), 
+              opacity 0.6s calc(0.5s + 0.33s + 0.1s + var(--rtdelay));
+}
+
+.slider--el.anim-9parts .part.mid-bot:before {
+  top: -200%;
+  left: -100%;
+}
+
+.slider--el.anim-9parts .part.right-bot {
+  top: 66.66%;
+  left: 66.66%;
+  transition: transform 0.9s calc(0.4s + var(--rtdelay)) cubic-bezier(.58,-0.7,.59,.95), 
+              opacity 0.6s calc(0.4s + 0.33s + 0.1s + var(--rtdelay));
+}
+
+.slider--el.anim-9parts .part.right-bot:before {
+  top: -200%;
+  left: -200%;
+}
+
+.slider--el.anim-9parts.removed .part {
+  transform: rotateX(90deg);
+  opacity: 0;
+}
+
+/* ===== Animación 3 partes ===== */
+.slider--el.anim-3parts .part {
+  position: absolute;
+  top: 0;
+  width: 33.5%;
+  height: 100%;
+  overflow: hidden;
+  transition: transform var(--rt) var(--rtdelay);
+  will-change: transform;
+}
+
+.slider--el.anim-3parts .part:before {
+  content: "";
+  display: block;
+  position: absolute;
+  width: 300%;
+  height: 100%;
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+}
+
+.slider--el.anim-3parts .part.left {
+  left: 0;
+}
+
+.slider--el.anim-3parts .part.left:before {
+  left: 0;
+}
+
+.slider--el.anim-3parts .part.mid {
+  left: 33.33%;
+}
+
+.slider--el.anim-3parts .part.mid:before {
+  left: -100%;
+}
+
+.slider--el.anim-3parts .part.right {
+  left: 66.66%;
+}
+
+.slider--el.anim-3parts .part.right:before {
+  left: -200%;
+}
+
+.slider--el.anim-3parts.removed .left {
+  transform: translate3d(-100%, -33.333%, 0);
+}
+
+.slider--el.anim-3parts.removed .mid {
+  transform: translate3d(0, 100%, 0);
+}
+
+.slider--el.anim-3parts.removed .right {
+  transform: translate3d(100%, -33.333%, 0);
+}
+
+/* ===== Animación 4 partes ===== */
+.slider--el.anim-4parts .part {
+  position: absolute;
+  width: 50.2%;
+  height: 50.2%;
+  overflow: hidden;
+  will-change: transform;
+}
+
+.slider--el.anim-4parts .part:before {
+  content: "";
+  display: block;
+  position: absolute;
+  width: 200%;
+  height: 200%;
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+}
+
+.slider--el.anim-4parts .part.top {
+  top: 0;
+  transition: transform calc(var(--rt) - 0.2s) var(--rtdelay);
+}
+
+.slider--el.anim-4parts .part.top:before {
+  top: 0;
+}
+
+.slider--el.anim-4parts .part.bot {
+  top: 50%;
+  transition: transform calc(var(--rt) - 0.2s) calc(var(--rtdelay) + 0.2s);
+}
+
+.slider--el.anim-4parts .part.bot:before {
+  top: -100%;
+}
+
+.slider--el.anim-4parts .part.left {
+  left: 0;
+}
+
+.slider--el.anim-4parts .part.left:before {
+  left: 0;
+}
+
+.slider--el.anim-4parts .part.right {
+  left: 50%;
+}
+
+.slider--el.anim-4parts .part.right:before {
+  left: -100%;
+}
+
+.slider--el.anim-4parts.removed .left {
+  transform: translateX(-100%);
+}
+
+.slider--el.anim-4parts.removed .right {
+  transform: translateX(100%);
+}
+
+.slider--el-bg {
+  position: absolute;
+  top: -10%;
+  left: -10%;
+  width: 120%;
+  height: 120%;
+  background-size: cover;
+  transition: transform 1s 1s;
+  will-change: transform;
+}
+
+.slider--el-bg .part:after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.15);
+}
+
+.slider--el-content {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  padding: 4rem;
+  transition: opacity 0.3s;
+  opacity: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+}
+
+.slider--el-heading {
+  font-size: 4rem;
+  font-family: 'Tesla', 'Arial Black', sans-serif;
+  text-transform: uppercase;
+  color: #fff;
+  text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+  margin-bottom: 1rem;
+}
+
+.slider--el-subtitle {
+  font-size: 1.5rem;
+  color: #fff;
+  font-weight: 500;
+  text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+}
+
+.slider--el.removed .slider--el-content {
+  opacity: 0;
+}
+
+@media (max-width: 768px) {
+  .slider--el-heading {
+    font-size: 2.5rem;
+  }
+  
+  .slider--el-subtitle {
+    font-size: 1.2rem;
+  }
+  
+  .slider--el-content {
+    padding: 2rem;
+  }
+  
+  .slider--control.left {
+    left: 1rem;
+  }
+  
+  .slider--control.right {
+    right: 1rem;
+  }
+}
