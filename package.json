@@ -6,7 +6,8 @@
     "dev": "next dev --webpack",
     "build": "next build --webpack",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "export:quote": "node scripts/export-quote.js"
   },
   "dependencies": {
     "next": "16.0.0",
@@ -22,6 +23,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.0.0",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "puppeteer": "^23.8.0"
   }
 }

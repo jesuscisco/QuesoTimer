@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Cotización • QuesoTimer (MTG Timer & Control)</title>
+  <style>
+    @page { size: A4; margin: 22mm; }
+    :root {
+      --fg: #0f172a; /* slate-900 */
+      --muted: #475569; /* slate-600 */
+      --brand: #7c3aed; /* violet-600 */
+      --bg-badge: #ede9fe; /* violet-100 */
+      --ok: #059669; /* emerald-600 */
+      --warn: #d97706; /* amber-600 */
+    }
+    * { box-sizing: border-box; }
+    html, body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Inter, Arial, sans-serif; color: var(--fg); }
+    h1,h2,h3 { margin: 0 0 8px; line-height: 1.15; }
+    p { margin: 0 0 8px; }
+    .wrapper { max-width: 780px; margin: 0 auto; }
+    .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
+    .brand { display: flex; gap: 12px; align-items: center; }
+    .brand img { width: 52px; height: 52px; object-fit: contain; border-radius: 8px; }
+    .brand .title { font-weight: 800; font-size: 20px; }
+    .meta { text-align: right; color: var(--muted); font-size: 12px; }
+    .badge { display: inline-block; background: var(--bg-badge); color: var(--brand); padding: 4px 10px; border-radius: 999px; font-weight: 700; font-size: 11px; }
+    .section { margin: 18px 0 12px; }
+    .card { border: 1px solid #e5e7eb; border-radius: 12px; padding: 14px 16px; margin-bottom: 12px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .muted { color: var(--muted); }
+    ul { margin: 6px 0 0 18px; }
+    li { margin: 4px 0; }
+    .price { font-weight: 800; font-size: 18px; color: var(--brand); }
+    .small { font-size: 12px; }
+    .totals { display: flex; justify-content: flex-end; margin-top: 12px; }
+    .totals .box { border: 1px dashed #e5e7eb; border-radius: 10px; padding: 10px 12px; text-align: right; width: 280px; }
+    .terms { font-size: 12px; color: var(--muted); }
+    .footer { margin-top: 24px; font-size: 12px; color: var(--muted); display: flex; justify-content: space-between; }
+    .highlight { color: var(--ok); font-weight: 700; }
+    .warn { color: var(--warn); font-weight: 700; }
+    .kicker { font-size: 12px; font-weight: 700; color: var(--muted); letter-spacing: .06em; text-transform: uppercase; }
+    .tier-title { display: flex; align-items: baseline; justify-content: space-between; }
+    .divider { height: 1px; background: #e5e7eb; margin: 10px 0; }
+    .print-note { text-align: right; font-size: 11px; color: var(--muted); }
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+    <div class="header">
+      <div class="brand">
+        <img src="../public/logoboards.png" alt="Logo" />
+        <div>
+          <div class="title">QuesoTimer</div>
+          <div class="muted">MTG Timer & Control System (PWA)</div>
+        </div>
+      </div>
+      <div class="meta">
+        <div class="badge">COTIZACIÓN</div>
+        <div>Fecha: 23/10/2025</div>
+        <div>Moneda: MXN</div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="kicker">Resumen</div>
+      <h1>Cotización para desarrollo e implementación</h1>
+      <p class="muted">Aplicación Next.js con Panel de Control, Timer sincronizado, Slider dinámico, Sonidos Web Audio y PWA offline.</p>
+    </div>
+
+    <div class="section grid">
+      <div class="card">
+        <div class="tier-title">
+          <h2>Paquete MVP</h2>
+          <div class="price">$25,000 – $35,000</div>
+        </div>
+        <div class="small muted">25–45 horas • $600–$800/h</div>
+        <div class="divider"></div>
+        <ul>
+          <li>Timer base (50→10), control de inicio/pausa/reset</li>
+          <li>Panel de Control remoto y sincronización (BroadcastChannel)</li>
+          <li>Slider de imágenes dinámico desde <code>public/slider</code></li>
+          <li>Sonido de alerta y fin (Web Audio), política de autoplay manejada</li>
+          <li>PWA básica (manifest + SW); instalación y offline core</li>
+          <li>Deploy básico y README</li>
+        </ul>
+      </div>
+      <div class="card">
+        <div class="tier-title">
+          <h2>Paquete Estándar</h2>
+          <div class="price">$35,000 – $65,000</div>
+        </div>
+        <div class="small muted">50–90 horas • $700–$900/h</div>
+        <div class="divider"></div>
+        <ul>
+          <li>Todo lo del MVP</li>
+          <li>Animaciones y blur cover del slider pulidas, preview en Panel</li>
+          <li>Alertas personalizadas en mm:ss con UI dedicada</li>
+          <li>Soporte multi-ventana (abrir pantalla), atajos (Alt+1, Alt+5)</li>
+          <li>QA desktop/móvil, optimizaciones y métricas básicas</li>
+          <li>Documentación ampliada y handoff</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="card">
+        <div class="tier-title">
+          <h2>Paquete Pro</h2>
+          <div class="price">$65,000 – $110,000</div>
+        </div>
+        <div class="small muted">90–130 horas • $800–$1,100/h</div>
+        <div class="divider"></div>
+        <ul>
+          <li>Todo lo del Estándar</li>
+          <li>Branding completo y ajustes visuales avanzados</li>
+          <li>Pruebas cross‑browser (Chrome, Edge, Firefox, Safari iOS)</li>
+          <li>Soporte para contenidos/activos y guías de operación</li>
+          <li>Capacitación (1–3 sesiones) y periodo de garantía</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="section grid">
+      <div class="card">
+        <h3>Alcance técnico</h3>
+        <ul>
+          <li>Next.js (App Router), Zustand, BroadcastChannel</li>
+          <li>Web Audio API (alertas, unlock por gesto)</li>
+          <li>PWA: manifest, service worker, caché de rutas/medios</li>
+          <li>Slider dinámico con animaciones y fondo difuminado sincronizado</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>Entregables</h3>
+        <ul>
+          <li>Código fuente en GitHub</li>
+          <li>Build de producción y soporte de arranque</li>
+          <li>Documentación y guía de uso</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="section grid">
+      <div class="card">
+        <h3>Tiempos estimados</h3>
+        <ul>
+          <li>MVP: 1–2 semanas</li>
+          <li>Estándar: 2–4 semanas</li>
+          <li>Pro: 4–6 semanas</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>Forma de pago</h3>
+        <ul>
+          <li>50% anticipo, 30% staging, 20% go‑live</li>
+          <li>Fuera de alcance: <span class="highlight">$700–$1,000/h</span></li>
+          <li>Vigencia de la cotización: 15 días</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="totals">
+      <div class="box">
+        <div class="muted small">Rango sugerido (Estándar)</div>
+        <div class="price">$35,000 – $65,000 MXN</div>
+        <div class="small">Impuestos y facturación a convenir.</div>
+      </div>
+    </div>
+
+    <div class="section terms">
+      <p>Notas: tiempos y costos sujetos a confirmación de alcance, activos (imágenes/sonidos) y pruebas requeridas. Se recomienda considerar 10–20% de contingencia por ajustes.</p>
+    </div>
+
+    <div class="footer">
+      <div>
+        <div><strong>Contacto</strong></div>
+        <div class="small">Nombre / Empresa • email@dominio.com • +52 55 0000 0000</div>
+      </div>
+      <div class="print-note">Archivo imprimible. Para generar PDF: Archivo → Imprimir → Guardar como PDF.</div>
+    </div>
+  </div>
+</body>
+</html>
