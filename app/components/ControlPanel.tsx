@@ -248,17 +248,18 @@ export default function ControlPanel(props: TimerControlProps) {
               <h4 className="text-md font-medium text-gray-300 mb-3">Ajustar Tiempo</h4>
               
               <div className="flex flex-wrap items-center gap-3 mb-4">
-                <select
+                <label className="text-gray-300 text-sm">Minutos:</label>
+                <input
+                  type="number"
+                  min={0}
+                  step={1}
                   value={timeToAdd}
-                  onChange={(e) => setTimeToAdd(Number(e.target.value))}
-                  className="bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white"
-                >
-                  <option value={1}>1 minuto</option>
-                  <option value={2}>2 minutos</option>
-                  <option value={5}>5 minutos</option>
-                  <option value={10}>10 minutos</option>
-                  <option value={15}>15 minutos</option>
-                </select>
+                  onChange={(e) => {
+                    const v = Number(e.target.value);
+                    setTimeToAdd(Number.isFinite(v) ? Math.max(0, Math.floor(v)) : 0);
+                  }}
+                  className="bg-gray-700 border border-gray-600 rounded px-3 py-2  ml-3.5 text-white w-24"
+                />
                 
                 <button
                   onClick={() => props.onAddTime(timeToAdd)}
@@ -277,17 +278,18 @@ export default function ControlPanel(props: TimerControlProps) {
 
               {/* Seconds adjustment */}
               <div className="flex flex-wrap items-center gap-3 mb-4">
-                <select
+                <label className="text-gray-300 text-sm">Segundos:</label>
+                <input
+                  type="number"
+                  min={0}
+                  step={1}
                   value={secondsToAdjust}
-                  onChange={(e) => setSecondsToAdjust(Number(e.target.value))}
-                  className="bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white"
-                >
-                  <option value={5}>5 segundos</option>
-                  <option value={10}>10 segundos</option>
-                  <option value={15}>15 segundos</option>
-                  <option value={30}>30 segundos</option>
-                  <option value={45}>45 segundos</option>
-                </select>
+                  onChange={(e) => {
+                    const v = Number(e.target.value);
+                    setSecondsToAdjust(Number.isFinite(v) ? Math.max(0, Math.floor(v)) : 0);
+                  }}
+                  className="bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white w-24"
+                />
 
                 <button
                   onClick={() => props.onAddSeconds(secondsToAdjust)}
