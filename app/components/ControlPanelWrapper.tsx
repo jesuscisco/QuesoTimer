@@ -16,6 +16,8 @@ export default function ControlPanelWrapper() {
     resetTimer,
     addTime,
     subtractTime,
+    addSeconds,
+    subtractSeconds,
     nextSlide,
     prevSlide,
     goToSlide,
@@ -31,6 +33,8 @@ export default function ControlPanelWrapper() {
       onResetTimer={() => { resetTimer(); broadcast('reset'); }}
       onAddTime={(m) => { addTime(m); broadcast('add', { minutes: m }); }}
       onSubtractTime={(m) => { subtractTime(m); broadcast('sub', { minutes: m }); }}
+  onAddSeconds={(s) => { addSeconds(s); broadcast('addSec', { seconds: s }); }}
+  onSubtractSeconds={(s) => { subtractSeconds(s); broadcast('subSec', { seconds: s }); }}
       onNextSlide={() => { nextSlide(); broadcast('nextSlide'); }}
       onPrevSlide={() => { prevSlide(); broadcast('prevSlide'); }}
       onGoToSlide={(idx) => { goToSlide(idx); broadcast('goToSlide', { index: idx }); }}

@@ -28,6 +28,8 @@ interface AppStore {
   resetTimer: () => void;
   addTime: (minutes: number) => void;
   subtractTime: (minutes: number) => void;
+  addSeconds: (seconds: number) => void;
+  subtractSeconds: (seconds: number) => void;
   
   // Slider Actions
   nextSlide: () => void;
@@ -108,6 +110,34 @@ export const useAppStore = create<AppStore>((set, get) => ({
         minutes: Math.max(0, state.timer.minutes - minutes),
       },
     }));
+  },
+  
+  addSeconds: (seconds: number) => {
+    set((state) => {
+      const clamped = Math.max(0, Math.floor(seconds));
+      const total = state.timer.minutes * 60 + state.timer.seconds + clamped;
+      return {
+        timer: {
+          ...state.timer,
+          minutes: Math.floor(total / 60),
+          seconds: total % 60,
+        },
+      };
+    });
+  },
+  
+  subtractSeconds: (seconds: number) => {
+    set((state) => {
+      const clamped = Math.max(0, Math.floor(seconds));
+      const total = Math.max(0, state.timer.minutes * 60 + state.timer.seconds - clamped);
+      return {
+        timer: {
+          ...state.timer,
+          minutes: Math.floor(total / 60),
+          seconds: total % 60,
+        },
+      };
+    });
   },
   
   // Slider Actions

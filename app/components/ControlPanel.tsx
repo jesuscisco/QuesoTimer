@@ -9,6 +9,8 @@ interface TimerControlProps {
   onResetTimer: () => void;
   onAddTime: (minutes: number) => void;
   onSubtractTime: (minutes: number) => void;
+  onAddSeconds: (seconds: number) => void;
+  onSubtractSeconds: (seconds: number) => void;
   onNextSlide: () => void;
   onPrevSlide: () => void;
   onGoToSlide: (slideIndex: number) => void;
@@ -30,6 +32,7 @@ interface TimerControlProps {
 
 export default function ControlPanel(props: TimerControlProps) {
   const [timeToAdd, setTimeToAdd] = useState<number>(1);
+  const [secondsToAdjust, setSecondsToAdjust] = useState<number>(10);
   const [customTime, setCustomTime] = useState<{ minutes: number; seconds: number }>({
     minutes: 50,
     seconds: 0
@@ -269,6 +272,35 @@ export default function ControlPanel(props: TimerControlProps) {
                   className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg font-medium transition-all duration-200"
                 >
                   ➖ Quitar
+                </button>
+              </div>
+
+              {/* Seconds adjustment */}
+              <div className="flex flex-wrap items-center gap-3 mb-4">
+                <select
+                  value={secondsToAdjust}
+                  onChange={(e) => setSecondsToAdjust(Number(e.target.value))}
+                  className="bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white"
+                >
+                  <option value={5}>5 segundos</option>
+                  <option value={10}>10 segundos</option>
+                  <option value={15}>15 segundos</option>
+                  <option value={30}>30 segundos</option>
+                  <option value={45}>45 segundos</option>
+                </select>
+
+                <button
+                  onClick={() => props.onAddSeconds(secondsToAdjust)}
+                  className="px-4 py-2 bg-blue-500 hover:bg-blue-600 rounded-lg font-medium transition-all duration-200"
+                >
+                  ➕ Agregar segundos
+                </button>
+
+                <button
+                  onClick={() => props.onSubtractSeconds(secondsToAdjust)}
+                  className="px-4 py-2 bg-purple-500 hover:bg-purple-600 rounded-lg font-medium transition-all duration-200"
+                >
+                  ➖ Quitar segundos
                 </button>
               </div>
 

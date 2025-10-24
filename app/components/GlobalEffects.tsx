@@ -31,7 +31,7 @@ export default function GlobalEffects() {
     const unsub = subscribe(({ action, payload }) => {
       const {
         startTimer, pauseTimer, resetTimer,
-        addTime, subtractTime,
+        addTime, subtractTime, addSeconds, subtractSeconds,
         nextSlide, prevSlide, goToSlide,
         toggleAutoSlide, setCustomAlert, clearCustomAlert, markAudioUnlocked,
       } = useAppStore.getState();
@@ -51,6 +51,12 @@ export default function GlobalEffects() {
           break;
         case 'sub':
           subtractTime(payload?.minutes ?? 0);
+          break;
+        case 'addSec':
+          addSeconds(payload?.seconds ?? 0);
+          break;
+        case 'subSec':
+          subtractSeconds(payload?.seconds ?? 0);
           break;
         case 'nextSlide':
           nextSlide();

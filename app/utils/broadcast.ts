@@ -11,6 +11,8 @@ type BroadcastMessage = {
     | 'reset'
     | 'add'
     | 'sub'
+    | 'addSec'
+    | 'subSec'
     | 'nextSlide'
     | 'prevSlide'
     | 'goToSlide'
