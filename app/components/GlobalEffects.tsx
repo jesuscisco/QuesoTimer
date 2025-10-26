@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { useAppStore } from '../store/useAppStoreSimple';
 import { useSimpleTimer } from '../hooks/useSimpleTimer';
 import { broadcast, subscribe } from '../utils/broadcast';
+import { getCustomImages } from '../utils/customImages';
 import { unlockAudioContext } from '../utils/sound';
 
 // Variable global para el slider interval (fuera del componente)
@@ -14,16 +15,27 @@ export default function GlobalEffects() {
   useSimpleTimer();
   
   useEffect(() => {
-    // Sincronizar cantidad de imágenes del slider con la carpeta public/slider
-    fetch('/api/slider-images')
-      .then((r) => r.json())
-      .then((data) => {
+    // Sincronizar cantidad de imágenes del slider: API + personalizadas (localStorage)
+    const recompute = async () => {
+      try {
+        const r = await fetch('/api/slider-images');
+        const data = await r.json();
         const list: string[] = Array.isArray(data?.images) ? data.images : [];
-        useAppStore.getState().setTotalSlides(list.length);
-      })
-      .catch(() => {
-        useAppStore.getState().setTotalSlides(0);
-      });
+        const custom = getCustomImages().map((c) => c.cachePath || c.dataUrl!).filter(Boolean) as string[];
+        useAppStore.getState().setTotalSlides(list.length + custom.length);
+      } catch {
+        const custom = getCustomImages();
+        useAppStore.getState().setTotalSlides(custom.length);
+      }
+    };
+    recompute();
+    const onStorage = (e: StorageEvent) => {
+      if (e.key && e.key.startsWith('customSliderImages')) {
+        recompute();
+      }
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
   }, []);
 
   useEffect(() => {

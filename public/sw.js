@@ -3,6 +3,7 @@ const CACHE_NAME = 'mtg-pwa-v1';
 const CORE_ASSETS = [
   '/',
   '/control',
+  '/timer',
   '/manifest.webmanifest',
   '/logoboards.png',
   '/sound/warning.mp3',
@@ -37,7 +38,7 @@ self.addEventListener('fetch', (event) => {
   // Runtime caching strategies
   // Next.js static assets
   const isNextStatic = sameOrigin && url.pathname.startsWith('/_next/');
-  const isMedia = sameOrigin && (url.pathname.startsWith('/slider/') || url.pathname.startsWith('/sound/'));
+  const isMedia = sameOrigin && (url.pathname.startsWith('/slider/') || url.pathname.startsWith('/sound/') || url.pathname.startsWith('/custom-slider/'));
   const dest = request.destination;
   const isAsset = ['style','script','font','image'].includes(dest);
 

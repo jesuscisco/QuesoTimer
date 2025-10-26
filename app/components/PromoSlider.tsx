@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAppStore } from '../store/useAppStoreSimple';
 import './slider.css';
+import { getCustomImages, ensureCustomImagesDataUrls } from '../utils/customImages';
 
 type AnimationType = 'anim-4parts' | 'anim-9parts' | 'anim-5parts' | 'anim-3parts';
 
@@ -15,28 +16,51 @@ interface SlideData {
 export default function PromoSlider() {
   const { currentSlide, setTotalSlides, goToSlide } = useAppStore();
   const sliderRef = useRef<HTMLDivElement>(null);
-  const [images, setImages] = useState<string[]>([]);
+  const [images, setImages] = useState<string[]>([]); // merged: api + custom
+  const [apiImages, setApiImages] = useState<string[]>([]);
 
-  // Load images from API and update store with total slides
+  // Load images from API + local custom and update store
   useEffect(() => {
     let mounted = true;
-    fetch('/api/slider-images')
-      .then((r) => r.json())
-      .then((data) => {
-        if (!mounted) return;
+    const load = async () => {
+      try {
+        const r = await fetch('/api/slider-images');
+        const data = await r.json();
         const list: string[] = Array.isArray(data?.images) ? data.images : [];
-        setImages(list);
-        setTotalSlides(list.length);
-        if (list.length > 0 && (currentSlide < 1 || currentSlide > list.length)) {
+        let customList = getCustomImages();
+        try { customList = await ensureCustomImagesDataUrls(); } catch {}
+        const custom = customList.map((c) => c.dataUrl || c.cachePath!).filter(Boolean) as string[];
+        if (!mounted) return;
+        setApiImages(list);
+        const merged = [...list, ...custom];
+        setImages(merged);
+        setTotalSlides(merged.length);
+        if (merged.length > 0 && (currentSlide < 1 || currentSlide > merged.length)) {
           goToSlide(1);
         }
-      })
-      .catch((e) => {
+      } catch (e) {
         console.error('Error loading slider images', e);
-        setImages([]);
-        setTotalSlides(0);
-      });
-    return () => { mounted = false; };
+        let customList = getCustomImages();
+        try { customList = await ensureCustomImagesDataUrls(); } catch {}
+        const custom = customList.map((c) => c.dataUrl || c.cachePath!).filter(Boolean) as string[];
+        if (!mounted) return;
+        setApiImages([]);
+        setImages(custom);
+        setTotalSlides(custom.length);
+      }
+    };
+    load();
+
+    const onStorage = (e: StorageEvent) => {
+      if (e.key && e.key.startsWith('customSliderImages')) {
+        const custom = getCustomImages().map((c) => c.dataUrl || c.cachePath!).filter(Boolean) as string[];
+        const merged = [...apiImages, ...custom];
+        setImages(merged);
+        setTotalSlides(merged.length);
+      }
+    };
+    window.addEventListener('storage', onStorage);
+    return () => { mounted = false; window.removeEventListener('storage', onStorage); };
   }, []);
 
   const slidesData: SlideData[] = useMemo(() => {

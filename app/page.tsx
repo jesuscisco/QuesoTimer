@@ -1,5 +1,6 @@
-import MTGLayout from './components/MTGLayout';
+import { redirect } from 'next/navigation';
 
 export default function Home() {
-  return <MTGLayout />;
+  // Redirect root to Control Panel as requested
+  redirect('/control');
 }

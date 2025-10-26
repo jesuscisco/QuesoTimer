@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { playWarning, playOver } from '../utils/sound';
+import { getCustomImages, addCustomImages, removeCustomImage, fileToResizedBlob, cacheCustomImage, deleteCachedCustomImage, blobToDataUrl, ensureCustomImagesDataUrls, makeId, type CustomImage } from '../utils/customImages';
 
 interface TimerControlProps {
   onStartTimer: () => void;
@@ -38,22 +39,53 @@ export default function ControlPanel(props: TimerControlProps) {
     seconds: 0
   });
   const [images, setImages] = useState<string[]>([]);
+  const [customImages, setCustomImages] = useState<CustomImage[]>([]);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [isOnline, setIsOnline] = useState<boolean>(typeof navigator !== 'undefined' ? navigator.onLine : true);
   const [deferredPrompt, setDeferredPrompt] = useState<any | null>(null);
   const [installAvailable, setInstallAvailable] = useState<boolean>(false);
 
-  // Cargar imágenes del slider para el preview
+  // Cargar imágenes (API + personalizadas) para el preview del panel
   useEffect(() => {
     let mounted = true;
-    fetch('/api/slider-images')
-      .then((r) => r.json())
-      .then((data) => {
+    const load = async () => {
+      try {
+        const r = await fetch('/api/slider-images');
+  const data = await r.json();
+  const list: string[] = Array.isArray(data?.images) ? data.images : [];
+  let custom = getCustomImages();
+    // Backfill missing dataUrls from Cache Storage so preview works before SW controls
+    try { custom = await ensureCustomImagesDataUrls(); } catch {}
         if (!mounted) return;
-        const list: string[] = Array.isArray(data?.images) ? data.images : [];
-        setImages(list);
-      })
-      .catch(() => setImages([]));
-    return () => { mounted = false; };
+  setCustomImages(custom);
+  setImages([...list, ...custom.map((c) => c.dataUrl || c.cachePath!).filter(Boolean) as string[]]);
+      } catch {
+  let custom = getCustomImages();
+    try { custom = await ensureCustomImagesDataUrls(); } catch {}
+        if (!mounted) return;
+  setCustomImages(custom);
+  setImages([...custom.map((c) => c.dataUrl || c.cachePath!).filter(Boolean) as string[]]);
+      }
+    };
+    load();
+    // Escuchar cambios en otras pestañas mediante el evento storage
+    const onStorage = (e: StorageEvent) => {
+      if (e.key && e.key.startsWith('customSliderImages')) {
+        let custom = getCustomImages();
+        // try to ensure dataUrls so preview never 404s before SW is active
+        // don't await in storage event for responsiveness
+        ensureCustomImagesDataUrls().then((updated) => setCustomImages(updated)).catch(() => {});
+        setCustomImages(custom);
+        setImages((prev) => {
+          // Asumimos que las primeras posiciones son del API (paths http/https)
+          const apiEnd = prev.findIndex((u) => u.startsWith('data:') || u.startsWith('/custom-slider/'));
+          const api = apiEnd === -1 ? prev : prev.slice(0, apiEnd);
+          return [...api, ...custom.map((c) => c.dataUrl || c.cachePath!).filter(Boolean) as string[]];
+        });
+      }
+    };
+    window.addEventListener('storage', onStorage);
+    return () => { mounted = false; window.removeEventListener('storage', onStorage); };
   }, []);
 
   // Estado online/offline del navegador
@@ -80,10 +112,10 @@ export default function ControlPanel(props: TimerControlProps) {
       setInstallAvailable(false);
       setDeferredPrompt(null);
       // Tras instalar desde el panel, abre una ventana del Timer (/) adicional
-      try {
+          try {
         const key = 'postInstallOpenedTimer';
         if (typeof window !== 'undefined' && !localStorage.getItem(key)) {
-          window.open('/', '_blank', 'noopener,noreferrer');
+          window.open('/timer', '_blank', 'noopener,noreferrer');
           localStorage.setItem(key, '1');
         }
       } catch {}
@@ -151,7 +183,7 @@ export default function ControlPanel(props: TimerControlProps) {
                     setInstallAvailable(false);
                     if (choice?.outcome === 'accepted') {
                       // Si se aceptó la instalación desde el panel, abrir una ventana del Timer ahora
-                      try { window.open('/', '_blank', 'noopener,noreferrer'); } catch {}
+                      try { window.open('/timer', '_blank', 'noopener,noreferrer'); } catch {}
                     }
                   } else {
                     // Fallback: añadir como app puede no estar disponible (p.ej. iOS Safari)
@@ -169,7 +201,7 @@ export default function ControlPanel(props: TimerControlProps) {
             </button>
             <button
               onClick={() => {
-                try { window.open('/', '_blank', 'noopener,noreferrer'); } catch {}
+                try { window.open('/timer', '_blank', 'noopener,noreferrer'); } catch {}
               }}
               className="px-3 py-1.5 rounded-md border text-xs transition-colors bg-green-700 hover:bg-green-800 border-green-600"
               title="Abrir pantalla del Timer y Slider"
@@ -420,6 +452,88 @@ export default function ControlPanel(props: TimerControlProps) {
                 ))}
               </div>
               {/* Blur always on - toggle removed as requested */}
+            </div>
+
+            {/* Gestión de imágenes personalizadas */}
+            <div className="border-t border-gray-600 pt-4">
+              <h4 className="text-md font-medium text-gray-300 mb-3">Imágenes Personalizadas</h4>
+              <div className="flex flex-wrap items-center gap-3 mb-3">
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  ref={fileInputRef}
+                  className="hidden"
+                  onChange={async (e) => {
+                    const files = Array.from(e.target.files || []);
+                    if (!files.length) return;
+                    // Procesar y redimensionar, guardar en Cache Storage
+                    const added: CustomImage[] = [];
+                    for (const f of files) {
+                      try {
+                        const id = makeId();
+                        const blob = await fileToResizedBlob(f, { maxW: 1600, maxH: 1600, quality: 0.85 });
+                        const cachePath = await cacheCustomImage(id, blob, blob.type || 'image/jpeg');
+                        // data URL fallback for preview and when SW not yet controlling
+                        let dataUrl: string | undefined;
+                        try { dataUrl = await blobToDataUrl(blob); } catch {}
+                        added.push({ id, name: f.name, cachePath, dataUrl, addedAt: Date.now() });
+                      } catch {}
+                    }
+                    if (added.length) {
+                      addCustomImages(added);
+                      const next = getCustomImages();
+                      setCustomImages(next);
+                      // Volver a cargar imágenes combinadas para preview
+                      try {
+                        const r = await fetch('/api/slider-images');
+                        const data = await r.json();
+                        const list: string[] = Array.isArray(data?.images) ? data.images : [];
+                        setImages([...list, ...next.map((c) => c.cachePath || c.dataUrl!).filter(Boolean) as string[]]);
+                      } catch {
+                        setImages([...next.map((c) => c.cachePath || c.dataUrl!).filter(Boolean) as string[]]);
+                      }
+                      // limpiar input
+                      if (fileInputRef.current) fileInputRef.current.value = '';
+                    }
+                  }}
+                />
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg font-medium transition-all duration-200"
+                >
+                  📁 Selecciona imagen
+                </button>
+                <span className="text-xs text-gray-400">Se guardan localmente en este navegador/dispositivo y se suman al slider.</span>
+              </div>
+              {customImages.length > 0 ? (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  {customImages.map((img) => (
+                    <div key={img.id} className="bg-gray-700 rounded-md border border-gray-600 overflow-hidden">
+                      <div className="aspect-video w-full bg-gray-800">
+                        <img src={img.dataUrl} alt={img.name} className="w-full h-full object-contain" />
+                      </div>
+                      <div className="p-2 flex items-center justify-between gap-2">
+                        <div className="truncate text-xs text-gray-300" title={img.name}>{img.name}</div>
+                        <button
+                          onClick={async () => {
+                            removeCustomImage(img.id);
+                            if (img.cachePath) { try { await deleteCachedCustomImage(img.cachePath); } catch {} }
+                            const next = getCustomImages();
+                            setCustomImages(next);
+                            setImages((prev) => prev.filter((u) => u !== (img.cachePath || img.dataUrl)));
+                          }}
+                          className="text-xs px-2 py-1 bg-red-600 hover:bg-red-700 rounded"
+                        >
+                          Eliminar
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-sm text-gray-400">No hay imágenes personalizadas.</div>
+              )}
             </div>
           </div>
         </div>
