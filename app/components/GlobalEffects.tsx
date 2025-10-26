@@ -41,58 +41,66 @@ export default function GlobalEffects() {
   useEffect(() => {
     // Suscribirse a mensajes de otras pestañas para replicar acciones
     const unsub = subscribe(({ action, payload }) => {
-      const {
-        startTimer, pauseTimer, resetTimer,
-        addTime, subtractTime, addSeconds, subtractSeconds,
-        nextSlide, prevSlide, goToSlide,
-        toggleAutoSlide, setCustomAlert, clearCustomAlert, markAudioUnlocked,
-      } = useAppStore.getState();
-
       switch (action) {
         case 'start':
-          startTimer();
+          useAppStore.getState().startTimer();
           break;
         case 'pause':
-          pauseTimer();
+          useAppStore.getState().pauseTimer();
           break;
         case 'reset':
-          resetTimer();
+          useAppStore.getState().resetTimer();
           break;
         case 'add':
-          addTime(payload?.minutes ?? 0);
+          useAppStore.getState().addTime(payload?.minutes ?? 0);
           break;
         case 'sub':
-          subtractTime(payload?.minutes ?? 0);
+          useAppStore.getState().subtractTime(payload?.minutes ?? 0);
           break;
         case 'addSec':
-          addSeconds(payload?.seconds ?? 0);
+          useAppStore.getState().addSeconds(payload?.seconds ?? 0);
           break;
         case 'subSec':
-          subtractSeconds(payload?.seconds ?? 0);
+          useAppStore.getState().subtractSeconds(payload?.seconds ?? 0);
           break;
         case 'nextSlide':
-          nextSlide();
+          useAppStore.getState().nextSlide();
           break;
         case 'prevSlide':
-          prevSlide();
+          useAppStore.getState().prevSlide();
           break;
         case 'goToSlide':
-          if (typeof payload?.index === 'number') goToSlide(payload.index);
+          if (typeof payload?.index === 'number') useAppStore.getState().goToSlide(payload.index);
           break;
         case 'toggleAuto':
-          toggleAutoSlide();
+          useAppStore.getState().toggleAutoSlide();
           break;
         case 'setCustomAlert':
           if (typeof payload?.minutes === 'number' && typeof payload?.seconds === 'number') {
-            setCustomAlert(payload.minutes, payload.seconds);
+            useAppStore.getState().setCustomAlert(payload.minutes, payload.seconds);
           }
           break;
         case 'clearCustomAlert':
-          clearCustomAlert();
+          useAppStore.getState().clearCustomAlert();
           break;
         case 'unlockAudio':
           // Note: Real audio unlock needs a user gesture per tab, this flag only gates play() attempts
-          markAudioUnlocked();
+          useAppStore.getState().markAudioUnlocked();
+          break;
+        case 'setTitle':
+          if (typeof payload?.title === 'string') useAppStore.getState().setTimerTitle(payload.title);
+          break;
+        case 'showModal':
+          {
+            const fn = useAppStore.getState().showSliderModal as unknown;
+            if (typeof fn === 'function') (fn as (img?: string) => void)(typeof payload?.image === 'string' ? payload.image : undefined);
+          }
+          break;
+        case 'hideModal':
+          {
+            const fn = useAppStore.getState().hideSliderModal as unknown;
+            if (typeof fn === 'function') (fn as () => void)();
+          }
           break;
       }
     });

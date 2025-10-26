@@ -19,7 +19,10 @@ type BroadcastMessage = {
     | 'toggleAuto'
     | 'setCustomAlert'
   | 'clearCustomAlert'
-  | 'unlockAudio';
+  | 'unlockAudio'
+  | 'setTitle'
+  | 'showModal'
+  | 'hideModal';
   payload?: any;
 };
 

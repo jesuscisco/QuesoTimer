@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { playWarning, playOver } from '../utils/sound';
-import { getCustomImages, addCustomImages, removeCustomImage, fileToResizedBlob, cacheCustomImage, deleteCachedCustomImage, blobToDataUrl, ensureCustomImagesDataUrls, makeId, type CustomImage } from '../utils/customImages';
+import { getCustomImages, addCustomImages, removeCustomImage, fileToResizedBlob, cacheCustomImage, deleteCachedCustomImage, blobToDataUrl, ensureCustomImagesDataUrls, makeId, getModalImage, setModalImage, cacheModalImage, ensureModalImageDataUrl, type CustomImage, type ModalImage } from '../utils/customImages';
 
 interface TimerControlProps {
   onStartTimer: () => void;
@@ -16,8 +16,11 @@ interface TimerControlProps {
   onPrevSlide: () => void;
   onGoToSlide: (slideIndex: number) => void;
   onToggleAutoSlide: () => void;
+  onShowSliderModal: (image?: string) => void;
+  onHideSliderModal: () => void;
   onSetCustomAlert: (minutes: number, seconds: number) => void;
   onClearCustomAlert: () => void;
+  onSetTitle: (title: string) => void;
   timerState: {
     minutes: number;
     seconds: number;
@@ -29,11 +32,13 @@ interface TimerControlProps {
   totalSlides: number;
   autoSlidePaused: boolean;
   customAlertSeconds: number | null;
+  currentTitle: string;
 }
 
 export default function ControlPanel(props: TimerControlProps) {
   const [timeToAdd, setTimeToAdd] = useState<number>(1);
   const [secondsToAdjust, setSecondsToAdjust] = useState<number>(10);
+  const [titleInput, setTitleInput] = useState<string>('');
   const [customTime, setCustomTime] = useState<{ minutes: number; seconds: number }>({
     minutes: 50,
     seconds: 0
@@ -41,6 +46,8 @@ export default function ControlPanel(props: TimerControlProps) {
   const [images, setImages] = useState<string[]>([]);
   const [customImages, setCustomImages] = useState<CustomImage[]>([]);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const modalFileRef = useRef<HTMLInputElement | null>(null);
+  const [modalImage, setModalImageState] = useState<ModalImage | null>(null);
   const [isOnline, setIsOnline] = useState<boolean>(typeof navigator !== 'undefined' ? navigator.onLine : true);
   const [deferredPrompt, setDeferredPrompt] = useState<any | null>(null);
   const [installAvailable, setInstallAvailable] = useState<boolean>(false);
@@ -56,15 +63,20 @@ export default function ControlPanel(props: TimerControlProps) {
   let custom = getCustomImages();
     // Backfill missing dataUrls from Cache Storage so preview works before SW controls
     try { custom = await ensureCustomImagesDataUrls(); } catch {}
+    // Load modal image (if any)
+    let m = await ensureModalImageDataUrl();
         if (!mounted) return;
   setCustomImages(custom);
   setImages([...list, ...custom.map((c) => c.dataUrl || c.cachePath!).filter(Boolean) as string[]]);
+  setModalImageState(m);
       } catch {
   let custom = getCustomImages();
     try { custom = await ensureCustomImagesDataUrls(); } catch {}
+    let m = await ensureModalImageDataUrl();
         if (!mounted) return;
   setCustomImages(custom);
   setImages([...custom.map((c) => c.dataUrl || c.cachePath!).filter(Boolean) as string[]]);
+  setModalImageState(m);
       }
     };
     load();
@@ -87,6 +99,11 @@ export default function ControlPanel(props: TimerControlProps) {
     window.addEventListener('storage', onStorage);
     return () => { mounted = false; window.removeEventListener('storage', onStorage); };
   }, []);
+
+  // Sync local title input with store value
+  useEffect(() => {
+    setTitleInput(props.currentTitle || '');
+  }, [props.currentTitle]);
 
   // Estado online/offline del navegador
   useEffect(() => {
@@ -327,58 +344,36 @@ export default function ControlPanel(props: TimerControlProps) {
                   onClick={() => props.onAddSeconds(secondsToAdjust)}
                   className="px-4 py-2 bg-blue-500 hover:bg-blue-600 rounded-lg font-medium transition-all duration-200"
                 >
-                  ➕ Agregar segundos
+                  ➕ Agregar
                 </button>
 
                 <button
                   onClick={() => props.onSubtractSeconds(secondsToAdjust)}
                   className="px-4 py-2 bg-purple-500 hover:bg-purple-600 rounded-lg font-medium transition-all duration-200"
                 >
-                  ➖ Quitar segundos
+                  ➖ Quitar
                 </button>
               </div>
 
-              {/* Custom Time Set */}
-              <div className="flex flex-wrap items-center gap-3">
-                <span className="text-gray-300">Tiempo personalizado:</span>
-                <input
-                  type="number"
-                  value={customTime.minutes}
-                  onChange={(e) => setCustomTime(prev => ({ ...prev, minutes: Math.max(0, Number(e.target.value)) }))}
-                  className="bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white w-20"
-                  min="0"
-                  max="99"
-                />
-                <span className="text-gray-300">:</span>
-                <input
-                  type="number"
-                  value={customTime.seconds}
-                  onChange={(e) => setCustomTime(prev => ({ ...prev, seconds: Math.max(0, Math.min(59, Number(e.target.value))) }))}
-                  className="bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white w-20"
-                  min="0"
-                  max="59"
-                />
-                <button
-                  onClick={() => props.onSetCustomAlert(customTime.minutes, customTime.seconds)}
-                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-lg font-medium transition-all duration-200"
-                >
-                  ⏰ Establecer
-                </button>
-                {typeof props.customAlertSeconds === 'number' && (
-                  <>
-                    <span className="text-gray-400 text-sm">
-                      Objetivo: {Math.floor((props.customAlertSeconds || 0) / 60).toString().padStart(2,'0')}:{((props.customAlertSeconds || 0) % 60).toString().padStart(2,'0')}
-                    </span>
-                    <button
-                      onClick={props.onClearCustomAlert}
-                      className="px-3 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg text-sm"
-                    >
-                      Limpiar
-                    </button>
-                  </>
-                )}
-              </div>
+         
             </div>
+          </div>
+
+          {/* Timer Title */}
+          <div className="flex flex-wrap items-center gap-3 mb-4 ">
+            <label className="text-gray-300 text-sm">Título del Timer:</label>
+            <input
+              type="text"
+              value={titleInput}
+              placeholder="MAGIC TIMER"
+              onChange={(e) => {
+                const v = e.target.value.slice(0, 60);
+                setTitleInput(v);
+                props.onSetTitle(v);
+              }}
+              className="bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white w-80"
+            />
+            <span className="text-xs text-gray-500">Se muestra durante el tiempo ordinario.</span>
           </div>
         </div>
 
@@ -504,8 +499,75 @@ export default function ControlPanel(props: TimerControlProps) {
                 >
                   📁 Selecciona imagen
                 </button>
+                {/* Modal image picker (single) */}
+                <input
+                  type="file"
+                  accept="image/*"
+                  ref={modalFileRef}
+                  className="hidden"
+                  onChange={async (e) => {
+                    const file = (e.target.files && e.target.files[0]) || null;
+                    if (!file) return;
+                    try {
+                      const blob = await fileToResizedBlob(file, { maxW: 1920, maxH: 1080, quality: 0.9 });
+                      const cachePath = await cacheModalImage(blob, blob.type || 'image/jpeg');
+                      let dataUrl: string | undefined;
+                      try { dataUrl = await blobToDataUrl(blob); } catch {}
+                      const mi: ModalImage = { name: file.name, cachePath, dataUrl, addedAt: Date.now() };
+                      setModalImage(mi);
+                      setModalImageState(mi);
+                      if (modalFileRef.current) modalFileRef.current.value = '';
+                    } catch {}
+                  }}
+                />
+                <button
+                  onClick={() => modalFileRef.current?.click()}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-lg font-medium transition-all duration-200"
+                  title="Seleccionar la imagen para el modal del slider"
+                >
+                  🖼 Seleccionar imagen de los pareos
+                </button>
                 <span className="text-xs text-gray-400">Se guardan localmente en este navegador/dispositivo y se suman al slider.</span>
               </div>
+              {modalImage ? (
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-40 aspect-video bg-gray-800 rounded border border-gray-700 overflow-hidden">
+                    <img src={modalImage.dataUrl || modalImage.cachePath} alt={modalImage.name || 'Modal'} className="w-full h-full object-contain" />
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <div className="text-xs text-gray-300 truncate" title={modalImage.name || ''}>{modalImage.name || 'Imagen del modal'}</div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => props.onShowSliderModal(modalImage.dataUrl || modalImage.cachePath)}
+                        className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 rounded text-sm"
+                      >
+                        Mostrar pareos
+                      </button>
+                      <button
+                        onClick={props.onHideSliderModal}
+                        className="px-6 py-3 bg-gray-600 hover:bg-gray-700 rounded-lg  transition-all duration-200 transform hover:scale-105 shadow-lg"
+                        title="Cerrar modal del slider"
+                      >
+                        ❌ Cerrar pareos
+                      </button>
+                      <button
+                        onClick={async () => {
+                          // Cerrar el modal si estuviera abierto
+                          try { props.onHideSliderModal(); } catch {}
+                          try {
+                            if (modalImage.cachePath) await deleteCachedCustomImage(modalImage.cachePath);
+                          } catch {}
+                          setModalImage(null);
+                          setModalImageState(null);
+                        }}
+                        className="px-3 py-1.5 bg-red-600 hover:bg-red-700 rounded text-sm"
+                      >
+                        Quitar imagen
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
               {customImages.length > 0 ? (
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   {customImages.map((img) => (

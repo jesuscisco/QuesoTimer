@@ -14,10 +14,12 @@ interface SlideData {
 }
 
 export default function PromoSlider() {
-  const { currentSlide, setTotalSlides, goToSlide } = useAppStore();
+  const { currentSlide, setTotalSlides, goToSlide, sliderModalVisible, sliderModalImage, hideSliderModal } = useAppStore();
   const sliderRef = useRef<HTMLDivElement>(null);
   const [images, setImages] = useState<string[]>([]); // merged: api + custom
   const [apiImages, setApiImages] = useState<string[]>([]);
+  const [modalShown, setModalShown] = useState<boolean>(false);
+  const [modalExiting, setModalExiting] = useState<boolean>(false);
 
   // Load images from API + local custom and update store
   useEffect(() => {
@@ -160,6 +162,23 @@ export default function PromoSlider() {
     };
   }, [slidesData]);
 
+  // Control local para permitir animación de salida
+  useEffect(() => {
+    if (sliderModalVisible) {
+      setModalExiting(false);
+      setModalShown(true);
+    } else {
+      if (modalShown) {
+        setModalExiting(true);
+        const t = setTimeout(() => {
+          setModalShown(false);
+          setModalExiting(false);
+        }, 350);
+        return () => clearTimeout(t);
+      }
+    }
+  }, [sliderModalVisible]);
+
   return (
     <div className={"slider"} ref={sliderRef}>
       {slidesData.map((slide) => (
@@ -174,6 +193,25 @@ export default function PromoSlider() {
           </div>
         </div>
       ))}
+
+      {/* Modal overlay covering the slider area */}
+      {modalShown && (
+        <div
+          className="absolute inset-0 z-20 overflow-hidden"
+          style={{ backgroundColor: 'rgba(0,0,0,0.75)' }}
+          onClick={() => hideSliderModal()}
+        >
+          <div
+            className={`h-full w-full flex items-center justify-center ${modalExiting ? 'slider-modal-exit' : 'slider-modal-enter'}`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {sliderModalImage ? (
+              <img src={sliderModalImage} alt="Modal" className="max-w-full max-h-full object-contain" />
+            ) : null}
+
+          </div>
+        </div>
+      )}
     </div>
   );
 }

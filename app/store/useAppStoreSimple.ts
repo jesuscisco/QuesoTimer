@@ -11,6 +11,11 @@ interface TimerState {
 interface AppStore {
   // Timer State
   timer: TimerState;
+  // Custom title for main phase
+  timerTitle: string;
+  // Slider Modal
+  sliderModalVisible: boolean;
+  sliderModalImage: string | null;
   
   // Slider State
   currentSlide: number;
@@ -44,6 +49,9 @@ interface AppStore {
   setCustomAlert: (minutes: number, seconds: number) => void;
   clearCustomAlert: () => void;
   markAudioUnlocked: () => void;
+  setTimerTitle: (title: string) => void;
+  showSliderModal: (image?: string | null) => void;
+  hideSliderModal: () => void;
 }
 
 export const useAppStore = create<AppStore>((set, get) => ({
@@ -55,12 +63,16 @@ export const useAppStore = create<AppStore>((set, get) => ({
     isRunning: false,
     isFinished: false,
   },
+  // Initial Timer Title (persisted)
+  timerTitle: (typeof window !== 'undefined' && localStorage.getItem('timerTitle')) || 'MAGIC TIMER',
   
   // Initial Slider State
   currentSlide: 1,
   totalSlides: 4,
   isSliderTransitioning: false,
   autoSlidePaused: false,
+  sliderModalVisible: false,
+  sliderModalImage: null,
   customAlertSeconds: null,
   customAlertFired: false,
   audioUnlocked: false,
@@ -226,4 +238,11 @@ export const useAppStore = create<AppStore>((set, get) => ({
   }),
   clearCustomAlert: () => set({ customAlertSeconds: null, customAlertFired: false }),
   markAudioUnlocked: () => set({ audioUnlocked: true }),
+  setTimerTitle: (title: string) => {
+    const t = String(title || '').slice(0, 60);
+    try { if (typeof window !== 'undefined') localStorage.setItem('timerTitle', t); } catch {}
+    set({ timerTitle: t });
+  },
+  showSliderModal: (image?: string | null) => set({ sliderModalVisible: true, sliderModalImage: image || null }),
+  hideSliderModal: () => set({ sliderModalVisible: false }),
 }));

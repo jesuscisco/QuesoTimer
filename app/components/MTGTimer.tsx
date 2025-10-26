@@ -3,7 +3,7 @@
 import { useAppStore } from '../store/useAppStoreSimple';
 
 export default function MTGTimer() {
-  const { timer } = useAppStore();
+  const { timer, timerTitle } = useAppStore();
 
   const formatTime = (minutes: number, seconds: number) => {
     return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
@@ -73,7 +73,7 @@ export default function MTGTimer() {
       <div className="relative z-10 text-center">
         {/* Título */}
         <h1 className={`text-2xl md:text-3xl lg:text-4xl xl:text-5xl font-bold mb-4 tracking-wider ${getTextColor()} drop-shadow-2xl`}>
-          {timer.isFirstTimer ? 'MAGIC TIMER' : timer.isFinished ? 'TIME\'S UP!' : 'OVERTIME'}
+          {timer.isFirstTimer ? (timerTitle || 'MAGIC TIMER') : timer.isFinished ? 'TIME\'S UP!' : 'OVERTIME'}
         </h1>
 
         {/* Display del timer */}

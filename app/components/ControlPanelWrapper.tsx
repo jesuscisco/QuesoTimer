@@ -11,6 +11,7 @@ export default function ControlPanelWrapper() {
     totalSlides,
     autoSlidePaused,
     customAlertSeconds,
+    timerTitle,
     startTimer,
     pauseTimer,
     resetTimer,
@@ -24,6 +25,9 @@ export default function ControlPanelWrapper() {
     toggleAutoSlide,
     setCustomAlert,
     clearCustomAlert,
+    setTimerTitle,
+    showSliderModal,
+    hideSliderModal,
   } = useAppStore();
 
   return (
@@ -46,6 +50,10 @@ export default function ControlPanelWrapper() {
       totalSlides={totalSlides}
       autoSlidePaused={autoSlidePaused}
       customAlertSeconds={customAlertSeconds}
+      currentTitle={timerTitle}
+      onSetTitle={(t) => { setTimerTitle(t); broadcast('setTitle', { title: t }); }}
+      onShowSliderModal={(image?: string) => { showSliderModal(image); broadcast('showModal', { image }); }}
+      onHideSliderModal={() => { hideSliderModal(); broadcast('hideModal'); }}
     />
   );
 }

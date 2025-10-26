@@ -23,6 +23,25 @@
   height: 100%;
 }
 
+/* Modal slide-in animation (right to left) */
+@keyframes sliderModalIn {
+  from { transform: translateX(100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+.slider-modal-enter {
+  animation: sliderModalIn 350ms ease-out forwards;
+}
+
+@keyframes sliderModalOut {
+  from { transform: translateX(0); opacity: 1; }
+  to { transform: translateX(100%); opacity: 0; }
+}
+
+.slider-modal-exit {
+  animation: sliderModalOut 350ms ease-in forwards;
+}
+
 .slider--control {
   z-index: 50;
   position: absolute;

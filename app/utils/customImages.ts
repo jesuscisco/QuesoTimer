@@ -11,7 +11,15 @@ export type CustomImage = {
   addedAt: number;
 };
 
+export type ModalImage = {
+  name?: string;
+  cachePath?: string;
+  dataUrl?: string;
+  addedAt: number;
+};
+
 const STORAGE_KEY = 'customSliderImages.v1';
+const MODAL_IMG_KEY = 'customSliderModalImage.v1';
 
 export function getCustomImages(): CustomImage[] {
   if (typeof window === 'undefined') return [];
@@ -126,6 +134,15 @@ export async function cacheCustomImage(id: string, blob: Blob, contentType = 'im
   return cachePath;
 }
 
+export async function cacheModalImage(blob: Blob, contentType = 'image/jpeg'): Promise<string> {
+  if (typeof caches === 'undefined') throw new Error('Cache Storage not available');
+  const cachePath = `/custom-slider/__modal.jpg`;
+  const cache = await caches.open(CUSTOM_CACHE);
+  const res = new Response(blob, { headers: { 'Content-Type': contentType } });
+  await cache.put(new Request(cachePath, { method: 'GET' }), res);
+  return cachePath;
+}
+
 export async function deleteCachedCustomImage(cachePath: string): Promise<boolean> {
   if (typeof caches === 'undefined') return false;
   const cache = await caches.open(CUSTOM_CACHE);
@@ -164,4 +181,37 @@ export async function ensureCustomImagesDataUrls(): Promise<CustomImage[]> {
     if (changed) setCustomImages(imgs);
   } catch {}
   return imgs;
+}
+
+export function getModalImage(): ModalImage | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(MODAL_IMG_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch { return null; }
+}
+
+export function setModalImage(img: ModalImage | null) {
+  if (typeof window === 'undefined') return;
+  try {
+    if (img) localStorage.setItem(MODAL_IMG_KEY, JSON.stringify(img));
+    else localStorage.removeItem(MODAL_IMG_KEY);
+  } catch {}
+}
+
+export async function ensureModalImageDataUrl(): Promise<ModalImage | null> {
+  const img = getModalImage();
+  if (!img || img.dataUrl || !img.cachePath) return img;
+  if (typeof caches === 'undefined') return img;
+  try {
+    const cache = await caches.open(CUSTOM_CACHE);
+    const res = await cache.match(new Request(img.cachePath));
+    if (res) {
+      const blob = await res.blob();
+      img.dataUrl = await blobToDataUrl(blob);
+      setModalImage(img);
+    }
+  } catch {}
+  return img;
 }
