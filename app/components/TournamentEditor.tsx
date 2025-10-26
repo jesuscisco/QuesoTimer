@@ -386,6 +386,56 @@ export default function TournamentEditor({
     try { localStorage.setItem(PENDING_KEY, '1'); setPendingRound(true); } catch {}
   }
 
+  // Two-Heads: generate teams by standings adjacency and place 2 teams per table
+  function generateTwoHeadsRoundFromStandings(roundNumber: number) {
+    const list = players.map((p) => p.trim()).filter(Boolean);
+    if (list.length < 4) {
+      setErrorMsg('no hay suficientes jugadores registrados');
+      return;
+    }
+    if (pendingRound) {
+      alert('Debes guardar los resultados de la ronda actual antes de generar la siguiente.');
+      return;
+    }
+    // order by current standings (individual), filter to current participants order
+    const standings = buildStandingsFromRounds();
+    const order = standings
+      .map((s) => s.name)
+      .filter((nm) => list.some((p) => p === nm));
+    // ensure any players without standings are appended (e.g., first round after reset?)
+    const unseen = list.filter((p) => !order.includes(p));
+    const ordered = [...order, ...unseen];
+    // build teams: adjacent pairs
+    const teams: string[][] = [];
+    for (let i = 0; i < ordered.length; i += 2) {
+      teams.push(ordered.slice(i, i + 2));
+    }
+    // tables: 2 teams per table
+    const result: string[][] = [];
+    let idx = 0;
+    while (idx + 1 < teams.length) {
+      const teamA = teams[idx];
+      const teamB = teams[idx + 1];
+      result.push([
+        `Equipo: ${teamA.join(' y ')}`,
+        `Equipo: ${teamB.join(' y ')}`,
+      ]);
+      idx += 2;
+    }
+    if (idx < teams.length) {
+      const lone = teams[idx];
+      result.push([`Equipo: ${lone.join(' y ')} (sin oponente)`]);
+      setNotice('Aviso: número impar de equipos, una mesa con un solo equipo.');
+    } else {
+      setNotice('');
+    }
+    setTables(result);
+    try {
+      setCurrentPairings({ title: `${title} — Ronda ${roundNumber}`, mode: 'twoHeads', tables: result, generatedAt: Date.now() });
+    } catch {}
+    try { localStorage.setItem(PENDING_KEY, '1'); setPendingRound(true); } catch {}
+  }
+
   function startTournament() {
     const list = players.map((p) => p.trim()).filter(Boolean);
     if (list.length === 0) {
@@ -514,6 +564,7 @@ export default function TournamentEditor({
       const raw = localStorage.getItem(ROUNDS_KEY);
       const rounds = raw ? JSON.parse(raw) : [];
       const roundNumber = Array.isArray(rounds) ? rounds.length + 1 : 1;
+      const isFinalRound = roundNumber === roundsTotal;
       // Fill Ronda
       rows.forEach(r => { r.Ronda = roundNumber; });
       const entry = {
@@ -527,31 +578,32 @@ export default function TournamentEditor({
       };
       const nextRounds = Array.isArray(rounds) ? [...rounds, entry] : [entry];
       localStorage.setItem(ROUNDS_KEY, JSON.stringify(nextRounds));
+      // Export CSV (detalle + resumen) ONLY when this was the final round
+      if (isFinalRound) {
+        const aoa: any[][] = [];
+        aoa.push(["Ronda", "Titulo", "Modo", "Mesa", "Puesto", "Participante", "Puntos", "Victorias", "Fecha"]);
+        rows.forEach((r) => {
+          aoa.push([r.Ronda, r.Titulo, r.Modo, r.Mesa, r.Puesto, r.Participante, r.Puntos, r.Victorias, r.Fecha]);
+        });
+        aoa.push([]);
+        aoa.push(["Resumen por jugador (incluye desempates)"]);
+        aoa.push(["Jugador", "Puntos", "OMW%", "Victorias", "PRF%", "Rondas"]);
+        const namesSet = new Set<string>([...Array.from(pointsByPlayer.keys()), ...Array.from(winsByPlayer.keys())]);
+        let standingsForExport: ReturnType<typeof buildStandingsFromRounds> = [];
+        try { standingsForExport = buildStandingsFromRounds(); } catch {}
+        const standingsMap = new Map<string, { omw: number; prf: number; points: number; wins: number; rounds: number }>();
+        standingsForExport.forEach((s) => standingsMap.set(s.name, { omw: s.omw, prf: s.prf, points: s.points, wins: s.wins, rounds: s.rounds }));
+        const summary = Array.from(namesSet)
+          .map((nm) => {
+            const s = standingsMap.get(nm) || { omw: 0, prf: 0, points: pointsByPlayer.get(nm) || 0, wins: winsByPlayer.get(nm) || 0, rounds: 0 };
+            return { name: nm, pts: s.points, omw: s.omw, wins: s.wins, prf: s.prf, rounds: s.rounds };
+          })
+          .sort((a, b) => b.pts - a.pts || b.omw - a.omw || b.wins - a.wins || b.prf - a.prf || a.name.localeCompare(b.name));
+        summary.forEach((row) => aoa.push([row.name, row.pts, Math.round(row.omw * 1000) / 10, row.wins, Math.round(row.prf * 1000) / 10, row.rounds]));
+        const safeTitle = (title || 'Torneo').replace(/[^\w\-]+/g, '_').slice(0, 50);
+        downloadCsv(`${safeTitle}_resultados.csv`, aoa);
+      }
     } catch {}
-
-    // Export CSV (detalle + resumen con desempates)
-    const aoa: any[][] = [];
-    aoa.push(["Ronda", "Titulo", "Modo", "Mesa", "Puesto", "Participante", "Puntos", "Victorias", "Fecha"]);
-    rows.forEach((r) => {
-      aoa.push([r.Ronda, r.Titulo, r.Modo, r.Mesa, r.Puesto, r.Participante, r.Puntos, r.Victorias, r.Fecha]);
-    });
-    aoa.push([]);
-    aoa.push(["Resumen por jugador (incluye desempates)"]);
-    aoa.push(["Jugador", "Puntos", "OMW%", "Victorias", "PRF%", "Rondas"]);
-    const namesSet = new Set<string>([...Array.from(pointsByPlayer.keys()), ...Array.from(winsByPlayer.keys())]);
-    let standingsForExport: ReturnType<typeof buildStandingsFromRounds> = [];
-    try { standingsForExport = buildStandingsFromRounds(); } catch {}
-    const standingsMap = new Map<string, { omw: number; prf: number; points: number; wins: number; rounds: number }>();
-    standingsForExport.forEach((s) => standingsMap.set(s.name, { omw: s.omw, prf: s.prf, points: s.points, wins: s.wins, rounds: s.rounds }));
-    const summary = Array.from(namesSet)
-      .map((nm) => {
-        const s = standingsMap.get(nm) || { omw: 0, prf: 0, points: pointsByPlayer.get(nm) || 0, wins: winsByPlayer.get(nm) || 0, rounds: 0 };
-        return { name: nm, pts: s.points, omw: s.omw, wins: s.wins, prf: s.prf, rounds: s.rounds };
-      })
-      .sort((a, b) => b.pts - a.pts || b.omw - a.omw || b.wins - a.wins || b.prf - a.prf || a.name.localeCompare(b.name));
-    summary.forEach((row) => aoa.push([row.name, row.pts, Math.round(row.omw * 1000) / 10, row.wins, Math.round(row.prf * 1000) / 10, row.rounds]));
-    const safeTitle = (title || 'Torneo').replace(/[^\w\-]+/g, '_').slice(0, 50);
-    downloadCsv(`${safeTitle}_resultados.csv`, aoa);
     // refresh historical after saving
     try {
       const event = new StorageEvent('storage', { key: ROUNDS_KEY });
@@ -729,12 +781,33 @@ export default function TournamentEditor({
               Reiniciar todo
             </button>
             {mode === 'twoHeads' && (
-              <button
-                onClick={startTournament}
-                className="px-4 py-2 rounded-lg font-semibold bg-green-600 hover:bg-green-700"
-              >
-                Iniciar torneo
-              </button>
+              <>
+                {roundsSavedCount === 0 && !pendingRound && tables.length === 0 && (
+                  <button
+                    onClick={() => {
+                      const list = players.map((p)=>p.trim()).filter(Boolean);
+                      if (list.length < 4) { setErrorMsg('no hay suficientes jugadores registrados'); return; }
+                      // Generate R1 for two heads (teams + tables of 2 teams)
+                      startTournament();
+                      try { localStorage.setItem(PENDING_KEY, '1'); setPendingRound(true); } catch {}
+                    }}
+                    className="px-3 py-1.5 rounded bg-blue-600 hover:bg-blue-700 text-sm"
+                  >
+                    Generar Ronda 1 (aleatoria)
+                  </button>
+                )}
+                {roundsSavedCount >= 1 && roundsSavedCount < roundsTotal && !pendingRound && (
+                  <button
+                    onClick={() => {
+                      const next = roundsSavedCount + 1;
+                      generateTwoHeadsRoundFromStandings(next);
+                    }}
+                    className="px-3 py-1.5 rounded bg-purple-600 hover:bg-purple-700 text-sm"
+                  >
+                    Generar siguiente ronda (auto)
+                  </button>
+                )}
+              </>
             )}
             {mode === 'ffa' && (
               <>
@@ -839,9 +912,9 @@ export default function TournamentEditor({
                 <button
                   onClick={saveResultsToStorageAndExcel}
                   className="px-3 py-1.5 rounded bg-teal-600 hover:bg-teal-700 text-sm"
-                  title="Guardar resultados (Excel y localStorage)"
+                  title={roundsSavedCount + 1 === roundsTotal ? 'Guardar resultados y exportar Excel/CSV' : 'Guardar resultados de esta ronda'}
                 >
-                  Guardar resultados
+                  {roundsSavedCount + 1 === roundsTotal ? 'Guardar y exportar' : 'Guardar resultados'}
                 </button>
               </div>
             </div>
@@ -978,29 +1051,32 @@ export default function TournamentEditor({
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-lg font-semibold text-green-300">Clasificación</h2>
             <div className="flex items-center gap-2">
-              <button
-                onClick={() => {
-                  try {
-                    const s = buildStandingsFromRounds();
-                    const aoa: any[][] = [];
-                    aoa.push(["#", "Jugador", "Puntos", "OMW%", "Victorias", "PRF%", "Rondas"]);
-                    s.forEach((row, i) => aoa.push([
-                      i + 1,
-                      row.name,
-                      row.points,
-                      Math.round(row.omw * 1000) / 10,
-                      row.wins,
-                      Math.round(row.prf * 1000) / 10,
-                      row.rounds,
-                    ]));
-                    const safeTitle = (title || 'Torneo').replace(/[^\w\-]+/g, '_').slice(0, 50);
-                    downloadCsv(`${safeTitle}_clasificacion.csv`, aoa);
-                  } catch {}
-                }}
-                className="px-3 py-1.5 rounded bg-teal-600 hover:bg-teal-700 text-sm"
-              >
-                Exportar clasificación
-              </button>
+              {roundsSavedCount >= roundsTotal && (
+                <button
+                  onClick={() => {
+                    try {
+                      const s = buildStandingsFromRounds();
+                      const aoa: any[][] = [];
+                      aoa.push(["#", "Jugador", "Puntos", "OMW%", "Victorias", "PRF%", "Rondas"]);
+                      s.forEach((row, i) => aoa.push([
+                        i + 1,
+                        row.name,
+                        row.points,
+                        Math.round(row.omw * 1000) / 10,
+                        row.wins,
+                        Math.round(row.prf * 1000) / 10,
+                        row.rounds,
+                      ]));
+                      const safeTitle = (title || 'Torneo').replace(/[^\w\-]+/g, '_').slice(0, 50);
+                      downloadCsv(`${safeTitle}_clasificacion.csv`, aoa);
+                    } catch {}
+                  }}
+                  className="px-3 py-1.5 rounded bg-teal-600 hover:bg-teal-700 text-sm"
+                  title="Exportar clasificación final"
+                >
+                  Exportar clasificación
+                </button>
+              )}
               {standingsModalOpen ? (
                 <button
                   onClick={() => {
