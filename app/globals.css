@@ -24,3 +24,30 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Print-friendly styles for pairings/standings */
+@media print {
+  html, body {
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+  /* Hide non-essential UI elements that are usually interactive */
+  button, .print\:hidden, [data-no-print="true"] {
+    display: none !important;
+  }
+  /* Ensure tables use full width and simple borders */
+  table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+  }
+  th, td {
+    border: 1px solid rgba(0,0,0,0.1) !important;
+    color: #000 !important;
+  }
+  /* Remove dark containers */
+  .bg-gray-800, .bg-gray-900, .border-gray-700, .text-white, .text-gray-100, .text-gray-200, .text-gray-300, .text-gray-400 {
+    background: transparent !important;
+    color: #000 !important;
+    border-color: rgba(0,0,0,0.1) !important;
+  }
+}

@@ -27,6 +27,8 @@ export default function ControlPanelWrapper() {
     clearCustomAlert,
     setTimerTitle,
     showSliderModal,
+    showPairingsModal,
+    showStandingsModal,
     hideSliderModal,
   } = useAppStore();
 
@@ -53,6 +55,8 @@ export default function ControlPanelWrapper() {
       currentTitle={timerTitle}
       onSetTitle={(t) => { setTimerTitle(t); broadcast('setTitle', { title: t }); }}
       onShowSliderModal={(image?: string) => { showSliderModal(image); broadcast('showModal', { image }); }}
+      onShowSliderModalPairings={() => { showPairingsModal(); broadcast('showModal', { type: 'pairings' }); }}
+      onShowSliderModalStandings={() => { showStandingsModal(); broadcast('showModal', { type: 'standings' }); }}
       onHideSliderModal={() => { hideSliderModal(); broadcast('hideModal'); }}
     />
   );

@@ -92,8 +92,17 @@ export default function GlobalEffects() {
           break;
         case 'showModal':
           {
-            const fn = useAppStore.getState().showSliderModal as unknown;
-            if (typeof fn === 'function') (fn as (img?: string) => void)(typeof payload?.image === 'string' ? payload.image : undefined);
+            const state = useAppStore.getState();
+            if (payload?.type === 'pairings') {
+              const fn = (state as any).showPairingsModal as undefined | (() => void);
+              if (typeof fn === 'function') fn();
+            } else if (payload?.type === 'standings') {
+              const fn = (state as any).showStandingsModal as undefined | (() => void);
+              if (typeof fn === 'function') fn();
+            } else {
+              const fn = state.showSliderModal as unknown;
+              if (typeof fn === 'function') (fn as (img?: string) => void)(typeof payload?.image === 'string' ? payload.image : undefined);
+            }
           }
           break;
         case 'hideModal':

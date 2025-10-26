@@ -16,6 +16,7 @@ interface AppStore {
   // Slider Modal
   sliderModalVisible: boolean;
   sliderModalImage: string | null;
+  sliderModalType: 'image' | 'pairings' | 'standings';
   
   // Slider State
   currentSlide: number;
@@ -51,6 +52,8 @@ interface AppStore {
   markAudioUnlocked: () => void;
   setTimerTitle: (title: string) => void;
   showSliderModal: (image?: string | null) => void;
+  showPairingsModal: () => void;
+  showStandingsModal: () => void;
   hideSliderModal: () => void;
 }
 
@@ -73,6 +76,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   autoSlidePaused: false,
   sliderModalVisible: false,
   sliderModalImage: null,
+  sliderModalType: 'image',
   customAlertSeconds: null,
   customAlertFired: false,
   audioUnlocked: false,
@@ -243,6 +247,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
     try { if (typeof window !== 'undefined') localStorage.setItem('timerTitle', t); } catch {}
     set({ timerTitle: t });
   },
-  showSliderModal: (image?: string | null) => set({ sliderModalVisible: true, sliderModalImage: image || null }),
+  showSliderModal: (image?: string | null) => set({ sliderModalVisible: true, sliderModalType: 'image', sliderModalImage: image || null }),
+  showPairingsModal: () => set({ sliderModalVisible: true, sliderModalType: 'pairings', sliderModalImage: null }),
+  showStandingsModal: () => set({ sliderModalVisible: true, sliderModalType: 'standings', sliderModalImage: null }),
   hideSliderModal: () => set({ sliderModalVisible: false }),
 }));

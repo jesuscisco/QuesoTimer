@@ -1,8 +1,11 @@
-'use client';
+"use client";
 
 import { useState, useEffect, useRef } from 'react';
 import { playWarning, playOver } from '../utils/sound';
 import { getCustomImages, addCustomImages, removeCustomImage, fileToResizedBlob, cacheCustomImage, deleteCachedCustomImage, blobToDataUrl, ensureCustomImagesDataUrls, makeId, getModalImage, setModalImage, cacheModalImage, ensureModalImageDataUrl, type CustomImage, type ModalImage } from '../utils/customImages';
+import { getCurrentPairings } from '../utils/pairings';
+import { getCurrentStandings } from '../utils/standings';
+import { subscribe } from '../utils/broadcast';
 
 interface TimerControlProps {
   onStartTimer: () => void;
@@ -17,6 +20,8 @@ interface TimerControlProps {
   onGoToSlide: (slideIndex: number) => void;
   onToggleAutoSlide: () => void;
   onShowSliderModal: (image?: string) => void;
+  onShowSliderModalPairings: () => void;
+  onShowSliderModalStandings: () => void;
   onHideSliderModal: () => void;
   onSetCustomAlert: (minutes: number, seconds: number) => void;
   onClearCustomAlert: () => void;
@@ -51,6 +56,12 @@ export default function ControlPanel(props: TimerControlProps) {
   const [isOnline, setIsOnline] = useState<boolean>(typeof navigator !== 'undefined' ? navigator.onLine : true);
   const [deferredPrompt, setDeferredPrompt] = useState<any | null>(null);
   const [installAvailable, setInstallAvailable] = useState<boolean>(false);
+  const [pairingsCount, setPairingsCount] = useState<number>(0);
+  const [pairingsTitle, setPairingsTitle] = useState<string>('');
+  const [standingsCount, setStandingsCount] = useState<number>(0);
+  const [standingsTitle, setStandingsTitle] = useState<string>('');
+  const [pairingsModalOpen, setPairingsModalOpen] = useState<boolean>(false);
+  const [standingsModalOpen, setStandingsModalOpen] = useState<boolean>(false);
 
   // Cargar imágenes (API + personalizadas) para el preview del panel
   useEffect(() => {
@@ -98,6 +109,53 @@ export default function ControlPanel(props: TimerControlProps) {
     };
     window.addEventListener('storage', onStorage);
     return () => { mounted = false; window.removeEventListener('storage', onStorage); };
+  }, []);
+
+  // Cargar conteo de pareos actuales y escuchar cambios
+  useEffect(() => {
+    const loadPairings = () => {
+      const p = getCurrentPairings();
+      setPairingsCount(p?.tables?.length || 0);
+      setPairingsTitle(p?.title || '');
+    };
+    loadPairings();
+    const onStorage = (e: StorageEvent) => {
+      if (!e.key) return;
+      if (e.key === 'pairings.current.v1') loadPairings();
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, []);
+
+  // Cargar conteo de clasificación actual
+  useEffect(() => {
+    const loadStandings = () => {
+      const s = getCurrentStandings();
+      setStandingsCount(s?.rows?.length || 0);
+      setStandingsTitle(s?.title || '');
+    };
+    loadStandings();
+    const onStorage = (e: StorageEvent) => {
+      if (!e.key) return;
+      if (e.key === 'standings.current.v1') loadStandings();
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, []);
+
+  // Sync modal open state across tabs via broadcast
+  useEffect(() => {
+    const unsub = subscribe(({ action, payload }) => {
+      if (action === 'showModal') {
+        if (payload?.type === 'pairings') setPairingsModalOpen(true);
+        if (payload?.type === 'standings') setStandingsModalOpen(true);
+      }
+      if (action === 'hideModal') {
+        setPairingsModalOpen(false);
+        setStandingsModalOpen(false);
+      }
+    });
+    return () => { if (unsub) unsub(); };
   }, []);
 
   // Sync local title input with store value
@@ -449,6 +507,68 @@ export default function ControlPanel(props: TimerControlProps) {
               {/* Blur always on - toggle removed as requested */}
             </div>
 
+            {/* Pareos actuales (modal de pareos) */}
+            <div className="border-t border-gray-600 pt-4">
+              <h4 className="text-md font-medium text-gray-300 mb-3">Pareos</h4>
+              <div className="flex flex-wrap items-center gap-3">
+                <button
+                  onClick={() => {
+                    if (pairingsModalOpen) {
+                      setPairingsModalOpen(false);
+                      props.onHideSliderModal();
+                    } else {
+                      if (pairingsCount === 0) return;
+                      setPairingsModalOpen(true); // optimistic
+                      props.onShowSliderModalPairings();
+                    }
+                  }}
+                  className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 ${pairingsModalOpen ? 'bg-gray-600 hover:bg-gray-700' : (pairingsCount > 0 ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-gray-600 cursor-not-allowed')}`}
+                  disabled={!pairingsModalOpen && pairingsCount === 0}
+                  title={pairingsModalOpen ? 'Ocultar pareos en la pantalla' : 'Mostrar pareos en la pantalla'}
+                >
+                  {pairingsModalOpen ? '❌ Dejar de mostrar' : '📋 Mostrar pareos actuales'}
+                </button>
+                <div className="text-xs text-gray-400 ml-2">
+                  {pairingsCount > 0 ? (
+                    <span>{pairingsCount} mesa{pairingsCount === 1 ? '' : 's'}{pairingsTitle ? ` • ${pairingsTitle}` : ''}</span>
+                  ) : (
+                    <span>No hay pareos guardados</span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Clasificación (modal de standings) */}
+            <div className="border-t border-gray-600 pt-4">
+              <h4 className="text-md font-medium text-gray-300 mb-3">Clasificación</h4>
+              <div className="flex flex-wrap items-center gap-3">
+                <button
+                  onClick={() => {
+                    if (standingsModalOpen) {
+                      setStandingsModalOpen(false);
+                      props.onHideSliderModal();
+                    } else {
+                      if (standingsCount === 0) return;
+                      setStandingsModalOpen(true); // optimistic
+                      props.onShowSliderModalStandings();
+                    }
+                  }}
+                  className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 ${standingsModalOpen ? 'bg-gray-600 hover:bg-gray-700' : (standingsCount > 0 ? 'bg-green-700 hover:bg-green-800' : 'bg-gray-600 cursor-not-allowed')}`}
+                  disabled={!standingsModalOpen && standingsCount === 0}
+                  title={standingsModalOpen ? 'Ocultar clasificación en la pantalla' : 'Mostrar clasificación en la pantalla'}
+                >
+                  {standingsModalOpen ? '❌ Dejar de mostrar' : '🏆 Mostrar clasificación'}
+                </button>
+                <div className="text-xs text-gray-400 ml-2">
+                  {standingsCount > 0 ? (
+                    <span>{standingsCount} jugador{standingsCount === 1 ? '' : 'es'}{standingsTitle ? ` • ${standingsTitle}` : ''}</span>
+                  ) : (
+                    <span>Sin clasificación cargada</span>
+                  )}
+                </div>
+              </div>
+            </div>
+
             {/* Gestión de imágenes personalizadas */}
             <div className="border-t border-gray-600 pt-4">
               <h4 className="text-md font-medium text-gray-300 mb-3">Imágenes Personalizadas</h4>
@@ -623,6 +743,29 @@ export default function ControlPanel(props: TimerControlProps) {
               className="px-6 py-4 bg-green-600 hover:bg-green-700 rounded-lg font-semibold transition-all duration-200 transform hover:scale-105 shadow-lg"
             >
               🚀 Comenzar Partida
+            </button>
+          </div>
+        </div>
+
+        {/* Torneos */}
+        <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
+          <h2 className="text-xl font-semibold mb-4 text-green-400">Torneos</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <button
+              onClick={() => {
+                try { window.open('/torneos/multi', '_blank', 'noopener,noreferrer'); } catch {}
+              }}
+              className="px-6 py-4 bg-blue-600 hover:bg-blue-700 rounded-lg font-semibold transition-all duration-200 transform hover:scale-105 shadow-lg"
+            >
+              Multi
+            </button>
+            <button
+              onClick={() => {
+                try { window.open('/torneos/2cabezas', '_blank', 'noopener,noreferrer'); } catch {}
+              }}
+              className="px-6 py-4 bg-purple-600 hover:bg-purple-700 rounded-lg font-semibold transition-all duration-200 transform hover:scale-105 shadow-lg"
+            >
+              2 cabezas
             </button>
           </div>
         </div>

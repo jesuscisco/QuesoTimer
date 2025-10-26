@@ -2,6 +2,7 @@
 
 import ClientOnly from './components/ClientOnly';
 import GlobalEffects from './components/GlobalEffects';
+import NavigationGuard from './components/NavigationGuard';
 
 export default function ClientProvider({
   children,
@@ -11,6 +12,7 @@ export default function ClientProvider({
   return (
     <ClientOnly>
       <GlobalEffects />
+      <NavigationGuard />
       {children}
     </ClientOnly>
   );
