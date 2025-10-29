@@ -53,6 +53,7 @@ export default function TournamentEditor({
   const [pairingsModalOpen, setPairingsModalOpen] = useState<boolean>(false);
   const [roundsSavedCount, setRoundsSavedCount] = useState<number>(0);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState<boolean>(false);
   type RoundDetail = { round: number; timestamp: number; players: Array<{ name: string; points: number }>; tables: string[][] };
   const [roundsDetail, setRoundsDetail] = useState<RoundDetail[]>([]);
 
@@ -506,6 +507,23 @@ export default function TournamentEditor({
   }
 
   function saveResultsToStorageAndExcel() {
+    if (isSaving) return;
+    // Basic guards
+    if (!pendingRound) {
+      setErrorMsg('No hay una ronda pendiente para guardar.');
+      return;
+    }
+    if (!tables || tables.length === 0) {
+      setErrorMsg('No hay mesas para guardar resultados.');
+      return;
+    }
+    // Check at least one placement selected
+    const anySelected = (placements || []).some((arr, ti) => Array.isArray(arr) && arr.some((v) => v !== -1 && tables[ti] && tables[ti][v] != null));
+    if (!anySelected) {
+      setErrorMsg('Debes seleccionar al menos un resultado antes de guardar.');
+      return;
+    }
+    setIsSaving(true);
     // Build rows from placements + points per player
     const time = Date.now();
     // New scoring: 1st=4, 2nd=3, 3rd=2, 4th=1
@@ -582,9 +600,19 @@ export default function TournamentEditor({
       if (isFinalRound) {
         const aoa: any[][] = [];
         aoa.push(["Ronda", "Titulo", "Modo", "Mesa", "Puesto", "Participante", "Puntos", "Victorias", "Fecha"]);
-        rows.forEach((r) => {
-          aoa.push([r.Ronda, r.Titulo, r.Modo, r.Mesa, r.Puesto, r.Participante, r.Puntos, r.Victorias, r.Fecha]);
-        });
+        // include ALL rounds played (detalle completo)
+        try {
+          const all = Array.isArray(nextRounds) ? nextRounds.slice().sort((a, b) => (a.round || 0) - (b.round || 0)) : [];
+          all.forEach((ent: any) => {
+            const rs: typeof rows = Array.isArray(ent?.rows) ? ent.rows : [];
+            rs.forEach((r) => {
+              aoa.push([r.Ronda, r.Titulo, r.Modo, r.Mesa, r.Puesto, r.Participante, r.Puntos, r.Victorias, r.Fecha]);
+            });
+          });
+        } catch {
+          // fallback to current round rows only
+          rows.forEach((r) => aoa.push([r.Ronda, r.Titulo, r.Modo, r.Mesa, r.Puesto, r.Participante, r.Puntos, r.Victorias, r.Fecha]));
+        }
         aoa.push([]);
         aoa.push(["Resumen por jugador (incluye desempates)"]);
         aoa.push(["Jugador", "Puntos", "OMW%", "Victorias", "PRF%", "Rondas"]);
@@ -603,7 +631,7 @@ export default function TournamentEditor({
         const safeTitle = (title || 'Torneo').replace(/[^\w\-]+/g, '_').slice(0, 50);
         downloadCsv(`${safeTitle}_resultados.csv`, aoa);
       }
-    } catch {}
+  } catch {}
     // refresh historical after saving
     try {
       const event = new StorageEvent('storage', { key: ROUNDS_KEY });
@@ -616,6 +644,9 @@ export default function TournamentEditor({
     } catch {}
     // clear pending flag (results saved)
     try { localStorage.removeItem(PENDING_KEY); setPendingRound(false); } catch {}
+    // Prevent double-save by clearing current tables and pairings (advance to clean state)
+    try { startNewRound(); } catch {}
+    setIsSaving(false);
   }
 
   function startNewRound() {
@@ -879,12 +910,15 @@ export default function TournamentEditor({
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-lg font-semibold text-green-300">Mesas</h2>
               <div className="flex items-center gap-2">
-                <button
-                  onClick={startTournament}
-                  className="px-3 py-1.5 rounded bg-indigo-600 hover:bg-indigo-700 text-sm"
-                >
-                  Re-asignar aleatorio
-                </button>
+                {roundsSavedCount === 0 && (
+                  <button
+                    onClick={startTournament}
+                    className="px-3 py-1.5 rounded bg-indigo-600 hover:bg-indigo-700 text-sm"
+                    title="Re-asignar aleatoriamente solo para la Ronda 1"
+                  >
+                    Re-asignar aleatorio
+                  </button>
+                )}
                 {pairingsModalOpen ? (
                   <button
                     onClick={() => { setPairingsModalOpen(false); try { broadcast('hideModal'); } catch {} }}
@@ -911,10 +945,11 @@ export default function TournamentEditor({
                 )}
                 <button
                   onClick={saveResultsToStorageAndExcel}
-                  className="px-3 py-1.5 rounded bg-teal-600 hover:bg-teal-700 text-sm"
+                  disabled={isSaving}
+                  className={`px-3 py-1.5 rounded text-sm ${isSaving ? 'bg-teal-900 cursor-not-allowed' : 'bg-teal-600 hover:bg-teal-700'}`}
                   title={roundsSavedCount + 1 === roundsTotal ? 'Guardar resultados y exportar Excel/CSV' : 'Guardar resultados de esta ronda'}
                 >
-                  {roundsSavedCount + 1 === roundsTotal ? 'Guardar y exportar' : 'Guardar resultados'}
+                  {isSaving ? 'Guardando…' : (roundsSavedCount + 1 === roundsTotal ? 'Guardar y exportar' : 'Guardar resultados')}
                 </button>
               </div>
             </div>
@@ -1067,8 +1102,9 @@ export default function TournamentEditor({
                         Math.round(row.prf * 1000) / 10,
                         row.rounds,
                       ]));
-                      const safeTitle = (title || 'Torneo').replace(/[^\w\-]+/g, '_').slice(0, 50);
-                      downloadCsv(`${safeTitle}_clasificacion.csv`, aoa);
+                      const d = new Date();
+                      const dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+                      downloadCsv(`${dateStr}.csv`, aoa);
                     } catch {}
                   }}
                   className="px-3 py-1.5 rounded bg-teal-600 hover:bg-teal-700 text-sm"

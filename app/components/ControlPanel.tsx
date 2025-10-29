@@ -62,6 +62,137 @@ export default function ControlPanel(props: TimerControlProps) {
   const [standingsTitle, setStandingsTitle] = useState<string>('');
   const [pairingsModalOpen, setPairingsModalOpen] = useState<boolean>(false);
   const [standingsModalOpen, setStandingsModalOpen] = useState<boolean>(false);
+  const aggregateFilesRef = useRef<HTMLInputElement | null>(null);
+  const [aggregating, setAggregating] = useState<boolean>(false);
+
+  // Minimal CSV helpers (compatible with our exported CSVs)
+  const toCsv = (aoa: any[][]): string => {
+    const esc = (v: any) => {
+      if (v == null) return '';
+      const s = String(v);
+      return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+    };
+    return aoa.map(row => row.map(esc).join(',')).join('\r\n');
+  };
+  const downloadCsv = (filename: string, aoa: any[][]) => {
+    const csv = toCsv(aoa);
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename.endsWith('.csv') ? filename : `${filename}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+  const parseCsv = (text: string): string[][] => {
+    const rows: string[][] = [];
+    let i = 0; const n = text.length; let cur: string[] = []; let field = '';
+    let inQuotes = false;
+    const pushField = () => { cur.push(field); field = ''; };
+    const pushRow = () => { rows.push(cur.slice()); cur = []; };
+    while (i < n) {
+      const ch = text[i];
+      if (inQuotes) {
+        if (ch === '"') {
+          if (i + 1 < n && text[i + 1] === '"') { field += '"'; i += 2; continue; }
+          inQuotes = false; i++; continue;
+        } else { field += ch; i++; continue; }
+      } else {
+        if (ch === '"') { inQuotes = true; i++; continue; }
+        if (ch === ',') { pushField(); i++; continue; }
+        if (ch === '\r') { i++; continue; }
+        if (ch === '\n') { pushField(); pushRow(); i++; continue; }
+        field += ch; i++; continue;
+      }
+    }
+    // flush last
+    pushField(); if (cur.length > 1 || (cur.length === 1 && cur[0] !== '')) pushRow();
+    return rows;
+  };
+  const splitTwoHeads = (participante: string): string[] => {
+    const cleaned = participante.replace(/\s*\(sin oponente\)\s*$/i, '');
+    const m = cleaned.match(/^\s*Equipo:\s*(.+)$/i);
+    const names = m ? m[1].split(/\s+y\s+/i) : [participante];
+    return names.map((s) => s.trim()).filter(Boolean);
+  };
+  const yyyymmdd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  const detectDateFromName = (name: string): { label: string; date: Date | null } => {
+    const m = name.match(/(\d{4})-(\d{2})-(\d{2})/);
+    if (m) {
+      const y = Number(m[1]); const mo = Number(m[2]); const da = Number(m[3]);
+      const dt = new Date(y, mo - 1, da);
+      if (!Number.isNaN(dt.getTime())) return { label: `${m[1]}-${m[2]}-${m[3]}`, date: dt };
+    }
+    return { label: '', date: null };
+  };
+  const aggregateCsvFiles = async (files: File[]) => {
+    setAggregating(true);
+    try {
+      if (files.length < 2) {
+        alert('Selecciona al menos 2 archivos CSV.');
+        return;
+      }
+      // Detect dates from filenames and sort ascending by date when possible
+      const withDates = files.map((f, idx) => ({ file: f, idx, meta: detectDateFromName(f.name) }));
+      withDates.sort((a, b) => {
+        const da = a.meta.date?.getTime();
+        const db = b.meta.date?.getTime();
+        if (da != null && db != null) return da - db;
+        if (da != null) return -1;
+        if (db != null) return 1;
+        return a.idx - b.idx;
+      });
+      const perFechaPoints: Array<{ label: string; map: Map<string, number> }> = [];
+      for (let fi = 0; fi < withDates.length; fi++) {
+        const f = withDates[fi];
+        const label = f.meta.label || `fecha ${fi + 1}`;
+        const txt = await f.file.text();
+        const table = parseCsv(txt);
+        if (table.length === 0) { perFechaPoints.push({ label, map: new Map() }); continue; }
+        // Expect header: Ronda, Titulo, Modo, Mesa, Puesto, Participante, Puntos, Victorias, Fecha
+        const header = table[0].map((h) => h.trim());
+        const idxParticipante = header.indexOf('Participante');
+        const idxPuntos = header.indexOf('Puntos');
+        const idxModo = header.indexOf('Modo');
+        const fechaMap = new Map<string, number>();
+        for (let r = 1; r < table.length; r++) {
+          const row = table[r];
+          if (!row || row.length === 0 || row.every((c) => c === '')) break; // stop at blank line before summary
+          const participante = row[idxParticipante] || '';
+          const puntos = Number(row[idxPuntos] || '0') || 0;
+          const modo = (row[idxModo] || '').trim();
+          const names = modo === 'twoHeads' ? splitTwoHeads(participante) : [participante];
+          names.forEach((nm) => {
+            const key = nm.trim();
+            if (!key) return;
+            fechaMap.set(key, (fechaMap.get(key) || 0) + puntos);
+          });
+        }
+        perFechaPoints.push({ label, map: fechaMap });
+      }
+      // Union of all player names
+      const names = new Set<string>();
+      perFechaPoints.forEach((entry) => entry.map.forEach((_, k) => names.add(k)));
+      const rows: any[][] = [];
+      const headers = ['Jugador'];
+      for (let i = 0; i < perFechaPoints.length; i++) headers.push(`Puntos ${perFechaPoints[i].label}`);
+      headers.push('Total de puntos');
+      rows.push(headers);
+      const all = Array.from(names.values()).map((nm) => {
+        const pts: number[] = perFechaPoints.map((m) => m.map.get(nm) || 0);
+        return { name: nm, pts, total: pts.reduce((a, b) => a + b, 0) };
+      }).sort((a, b) => b.total - a.total || a.name.localeCompare(b.name));
+      all.forEach((rec, idx) => {
+        rows.push([rec.name, ...rec.pts, rec.total]);
+      });
+      const today = yyyymmdd(new Date());
+      downloadCsv(`tabla_acumulada_${today}.csv`, rows);
+    } finally {
+      setAggregating(false);
+    }
+  };
 
   // Cargar imágenes (API + personalizadas) para el preview del panel
   useEffect(() => {
@@ -768,6 +899,36 @@ export default function ControlPanel(props: TimerControlProps) {
               2 cabezas
             </button>
           </div>
+          {/* Generar tabla acumulada de fechas */}
+          <div className="mt-4 border-t border-gray-700 pt-4">
+            <input
+              ref={aggregateFilesRef}
+              type="file"
+              accept=".csv,text/csv"
+              multiple
+              className="hidden"
+              onChange={async (e) => {
+                const files = Array.from(e.target.files || []);
+                if (!files.length) return;
+                await aggregateCsvFiles(files);
+                if (aggregateFilesRef.current) aggregateFilesRef.current.value = '';
+              }}
+            />
+            <button
+              onClick={() => aggregateFilesRef.current?.click()}
+              disabled={aggregating}
+              className={`px-6 py-4 ${aggregating ? 'bg-gray-600 cursor-not-allowed' : 'bg-teal-600 hover:bg-teal-700'} rounded-lg font-semibold transition-all duration-200 transform hover:scale-105 shadow-lg`}
+              title="Leer CSVs exportados y generar tabla consolidada por fecha"
+            >
+              {aggregating ? 'Procesando…' : 'Generar tabla'}
+            </button>
+            <div className="text-xs text-gray-400 mt-2">
+              Sube 2 o más CSV exportados (cada archivo = una fecha). Etiquetamos cada columna con la fecha YYYY-MM-DD detectada en el nombre del archivo; si no la tiene, usamos orden de carga.
+            </div>
+            <div className="text-xs text-gray-500 mt-1">
+              El archivo generado se descargará como tabla_acumulada_YYYY-MM-DD.csv con la fecha de creación.
+            </div>
+          </div>
         </div>
 
         {/* Prueba de sonidos */}
@@ -789,11 +950,281 @@ export default function ControlPanel(props: TimerControlProps) {
           </div>
         </div>
 
+        {/* Lista: sumar cartas desde Moxfield */}
+        <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
+          <h2 className="text-xl font-semibold mb-4 text-green-400">Lista</h2>
+          <div className="space-y-3">
+            <p className="text-sm text-gray-300">Pega una o varias URLs de Moxfield (una por línea). Ejemplo: https://moxfield.com/decks/TqIGnMi30EKaZE1OrBPd2g</p>
+            <MoxfieldAggregator downloadCsv={downloadCsv} />
+          </div>
+        </div>
+
         {/* Footer */}
         <div className="text-center text-gray-500 text-sm border-t border-gray-700 pt-4">
           Panel de Control - Magic: The Gathering Timer & Slider
         </div>
       </div>
+    </div>
+  );
+}
+
+// --- Subcomponente: Moxfield Aggregator ---
+function MoxfieldAggregator({ downloadCsv }: { downloadCsv: (filename: string, aoa: any[][]) => void }) {
+  const [urlsText, setUrlsText] = useState<string>("");
+  const [includeSide, setIncludeSide] = useState<boolean>(true);
+  const [onlyRepeated, setOnlyRepeated] = useState<boolean>(false);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string>("");
+  const [results, setResults] = useState<Array<{ name: string; qty: number }>>([]);
+  const [details, setDetails] = useState<Array<{ name: string; qty: number; setName?: string; setCode?: string; rarity?: string; colors?: string[] }>>([]);
+  const [rarityFilter, setRarityFilter] = useState<string>('');
+  const [setCodeFilter, setSetCodeFilter] = useState<string>('');
+  const [colorFilter, setColorFilter] = useState<Record<string, boolean>>({ W: false, U: false, B: false, R: false, G: false, C: false });
+  const [sortBy, setSortBy] = useState<'qty' | 'name' | 'setName' | 'setCode' | 'rarity' | 'colors'>('qty');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const [diag, setDiag] = useState<{ processed: string[]; failures: Array<{ url: string; reason: string }> } | null>(null);
+
+  const handleAnalyze = async () => {
+    const lines = urlsText.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+    if (lines.length === 0) {
+      setError('Ingresa al menos 1 URL de Moxfield.');
+      try { alert('Ingresa al menos 1 URL de Moxfield.'); } catch {}
+      return;
+    }
+    setLoading(true); setError(""); setResults([]);
+    try {
+      const r = await fetch('/api/moxfield', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ urls: lines, includeSideboard: includeSide, enrichScryfall: true })
+      });
+      if (!r.ok) {
+        const t = await r.text();
+        throw new Error(t || `Error ${r.status}`);
+      }
+  const data = await r.json();
+  const list: Array<{ name: string; qty: number }> = Array.isArray(data?.aggregated) ? data.aggregated : [];
+  const det: Array<{ name: string; qty: number; setName?: string; setCode?: string; rarity?: string; colors?: string[] }> = Array.isArray(data?.aggregatedDetails) ? data.aggregatedDetails : [];
+  setResults(list);
+  setDetails(det);
+  setDiag({ processed: Array.isArray(data?.processed) ? data.processed : [], failures: Array.isArray(data?.failures) ? data.failures : [] });
+    } catch (e: any) {
+      setError(e?.message || 'Error al procesar las listas.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const listMerged = (() => {
+    if (!results.length) return [] as Array<{ name: string; qty: number; setName?: string; setCode?: string; rarity?: string; colors?: string[] }>;
+    const mapDet = new Map(details.map((d) => [d.name, d] as const));
+    return results.map((r) => {
+      const d = mapDet.get(r.name);
+      return { name: r.name, qty: r.qty, setName: d?.setName, setCode: d?.setCode, rarity: d?.rarity, colors: d?.colors };
+    });
+  })();
+
+  const filtered = listMerged
+    .filter((rec) => (onlyRepeated ? (rec.qty || 0) >= 2 : true))
+    .filter((rec) => (rarityFilter ? (rec.rarity || '') === rarityFilter : true))
+    .filter((rec) => (setCodeFilter ? (rec.setCode || '') === setCodeFilter : true))
+    .filter((rec) => {
+      const selectedColors = Object.entries(colorFilter).filter(([k, v]) => v).map(([k]) => k);
+      if (selectedColors.length === 0) return true;
+      const rc = rec.colors && rec.colors.length ? rec.colors : ['C'];
+      // Require All selected colors to be included in record colors
+      return selectedColors.every((c) => rc.includes(c));
+    })
+    .sort((a, b) => {
+      const dir = sortDir === 'asc' ? 1 : -1;
+      const rarityRank = (r?: string) => {
+        const x = (r || '').toLowerCase();
+        const map: Record<string, number> = { mythic: 1, rare: 2, uncommon: 3, common: 4, special: 5, bonus: 6 };
+        return map[x] || 99;
+      };
+      const colorKey = (c?: string[]) => (c && c.length ? c.join('') : '');
+      let va: any; let vb: any;
+      switch (sortBy) {
+        case 'name': va = a.name; vb = b.name; break;
+        case 'setName': va = a.setName || ''; vb = b.setName || ''; break;
+        case 'setCode': va = a.setCode || ''; vb = b.setCode || ''; break;
+        case 'rarity': va = rarityRank(a.rarity); vb = rarityRank(b.rarity); break;
+        case 'colors': va = colorKey(a.colors); vb = colorKey(b.colors); break;
+        case 'qty': default: va = a.qty; vb = b.qty; break;
+      }
+      if (typeof va === 'number' && typeof vb === 'number') return (va - vb) * dir;
+      const sa = String(va); const sb = String(vb);
+      return sa.localeCompare(sb) * dir;
+    });
+
+  const onSort = (key: 'qty' | 'name' | 'setName' | 'setCode' | 'rarity' | 'colors') => {
+    if (sortBy === key) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortBy(key);
+      setSortDir(key === 'qty' ? 'desc' : 'asc');
+    }
+  };
+
+  const download = () => {
+    const rows: any[][] = [["Carta", "Cantidad"]];
+    filtered.forEach((r) => rows.push([r.name, r.qty]));
+    const today = new Date();
+    const dateStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+    downloadCsv(`lista_aggregada_${dateStr}.csv`, rows);
+  };
+
+  const downloadExcelLike = () => {
+    // Build rows with columns: Código, Expansión, Rareza, Color, Carta, Cantidad
+    const rows: any[][] = [["Código", "Expansión", "Rareza", "Color", "Carta", "Cantidad"]];
+    filtered.forEach((r) => rows.push([
+      r.setCode || '',
+      r.setName || '',
+      r.rarity || '',
+      (r.colors && r.colors.length ? r.colors.join('') : ''),
+      r.name,
+      r.qty,
+    ]));
+    const today = new Date();
+    const dateStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+    downloadCsv(`lista_excel_${dateStr}.csv`, rows);
+  };
+
+  return (
+    <div className="space-y-3">
+      <textarea
+        className="w-full min-h-28 bg-gray-700 border border-gray-600 rounded p-3 text-sm text-white"
+        placeholder="Pega aquí las URLs de Moxfield, una por línea"
+        value={urlsText}
+        onChange={(e) => setUrlsText(e.target.value)}
+      />
+      <div className="flex flex-wrap items-center gap-4">
+        <label className="flex items-center gap-2 text-sm text-gray-300">
+          <input type="checkbox" checked={includeSide} onChange={(e) => setIncludeSide(e.target.checked)} />
+          Incluir sideboard
+        </label>
+        <label className="flex items-center gap-2 text-sm text-gray-300">
+          <input type="checkbox" checked={onlyRepeated} onChange={(e) => setOnlyRepeated(e.target.checked)} />
+          Solo repetidas (≥ 2)
+        </label>
+      </div>
+      {/* Filtros */}
+      <div className="flex flex-wrap items-end gap-3">
+        <div>
+          <label className="block text-xs text-gray-400">Rareza</label>
+          <select
+            className="bg-gray-700 border border-gray-600 rounded px-3 py-1 text-sm text-white"
+            value={rarityFilter}
+            onChange={(e) => setRarityFilter(e.target.value)}
+          >
+            <option value="">Todas</option>
+            {Array.from(new Set(details.map((d) => (d.rarity || '').trim()).filter(Boolean))).sort().map((r) => (
+              <option key={r} value={r}>{r}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs text-gray-400">Código expansión</label>
+          <select
+            className="bg-gray-700 border border-gray-600 rounded px-3 py-1 text-sm text-white"
+            value={setCodeFilter}
+            onChange={(e) => setSetCodeFilter(e.target.value)}
+          >
+            <option value="">Todos</option>
+            {Array.from(new Set(details.map((d) => (d.setCode || '').trim()).filter(Boolean))).sort().map((c) => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
+        </div>
+        <div className="flex flex-col">
+          <label className="block text-xs text-gray-400">Color</label>
+          <div className="flex flex-wrap gap-2 text-sm text-gray-300">
+            {(['W','U','B','R','G','C'] as const).map((c) => (
+              <label key={c} className="inline-flex items-center gap-1">
+                <input type="checkbox" checked={!!colorFilter[c]} onChange={(e) => setColorFilter((prev) => ({ ...prev, [c]: e.target.checked }))} />
+                {c}
+              </label>
+            ))}
+          </div>
+        </div>
+        {(rarityFilter || setCodeFilter || Object.values(colorFilter).some(Boolean)) && (
+          <button
+            className="px-3 py-1 bg-gray-600 hover:bg-gray-700 rounded text-xs"
+            onClick={() => { setRarityFilter(''); setSetCodeFilter(''); setColorFilter({ W:false, U:false, B:false, R:false, G:false, C:false }); }}
+          >
+            Limpiar filtros
+          </button>
+        )}
+      </div>
+      <div className="flex flex-wrap gap-3">
+        <button
+          onClick={handleAnalyze}
+          disabled={loading}
+          className={`px-5 py-2 rounded ${loading ? 'bg-gray-600 cursor-not-allowed' : 'bg-teal-600 hover:bg-teal-700'} font-semibold`}
+        >
+          {loading ? 'Procesando…' : 'Analizar listas'}
+        </button>
+        {filtered.length > 0 && (
+          <button
+            onClick={download}
+            className="px-5 py-2 rounded bg-indigo-600 hover:bg-indigo-700 font-semibold"
+          >
+            Descargar CSV
+          </button>
+        )}
+        {filtered.length > 0 && (
+          <button
+            onClick={downloadExcelLike}
+            className="px-5 py-2 rounded bg-green-700 hover:bg-green-800 font-semibold"
+            title="Exporta columnas: Expansión, Rareza, Carta, Cantidad (CSV compatible con Excel)"
+          >
+            Descargar Excel (Exp/Rareza/Carta)
+          </button>
+        )}
+      </div>
+      {error && <div className="text-red-400 text-sm">{error}</div>}
+      {diag && (
+        <div className="text-xs text-gray-400">
+          {diag.processed?.length ? <div>Procesados: {diag.processed.join(', ')}</div> : null}
+          {diag.failures?.length ? (
+            <div className="text-red-300 mt-1">
+              Fallidos: {diag.failures.map((f) => `${f.url} (${f.reason})`).join('; ')}
+            </div>
+          ) : null}
+          {(!error && filtered.length === 0) ? (
+            <div className="mt-1">No se encontraron cartas. Verifica que las listas sean públicas.</div>
+          ) : null}
+        </div>
+      )}
+      {filtered.length > 0 && (
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-sm">
+            <thead>
+              <tr className="text-left text-gray-300">
+                <th className="px-2 py-1 border-b border-gray-700 cursor-pointer" onClick={() => onSort('setName')}>Expansión {sortBy==='setName' ? (sortDir==='asc'?'▲':'▼') : ''}</th>
+                <th className="px-2 py-1 border-b border-gray-700 cursor-pointer" onClick={() => onSort('setCode')}>Código {sortBy==='setCode' ? (sortDir==='asc'?'▲':'▼') : ''}</th>
+                <th className="px-2 py-1 border-b border-gray-700 cursor-pointer" onClick={() => onSort('rarity')}>Rareza {sortBy==='rarity' ? (sortDir==='asc'?'▲':'▼') : ''}</th>
+                <th className="px-2 py-1 border-b border-gray-700 cursor-pointer" onClick={() => onSort('colors')}>Color {sortBy==='colors' ? (sortDir==='asc'?'▲':'▼') : ''}</th>
+                <th className="px-2 py-1 border-b border-gray-700 cursor-pointer" onClick={() => onSort('name')}>Carta {sortBy==='name' ? (sortDir==='asc'?'▲':'▼') : ''}</th>
+                <th className="px-2 py-1 border-b border-gray-700 cursor-pointer" onClick={() => onSort('qty')}>Cantidad {sortBy==='qty' ? (sortDir==='asc'?'▲':'▼') : ''}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((r) => (
+                <tr key={r.name} className="hover:bg-gray-700/40">
+                  <td className="px-2 py-1 border-b border-gray-800">{r.setName || ''}</td>
+                  <td className="px-2 py-1 border-b border-gray-800">{r.setCode || ''}</td>
+                  <td className="px-2 py-1 border-b border-gray-800">{r.rarity || ''}</td>
+                  <td className="px-2 py-1 border-b border-gray-800">{(r.colors && r.colors.length) ? r.colors.join('') : ''}</td>
+                  <td className="px-2 py-1 border-b border-gray-800">{r.name}</td>
+                  <td className="px-2 py-1 border-b border-gray-800">{r.qty}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div className="text-xs text-gray-400 mt-2">{filtered.length} cartas</div>
+        </div>
+      )}
     </div>
   );
 }
