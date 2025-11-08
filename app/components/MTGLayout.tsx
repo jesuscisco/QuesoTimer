@@ -31,12 +31,22 @@ export default function MTGLayout() {
         </div>
       </div>
 
-      {/* Layout para pantallas pequeñas - slider abajo */}
-      <div className="flex md:hidden h-screen flex-col">
+      {/* Layout para pantallas pequeñas - portrait (timer arriba / slider abajo) */}
+      <div className="only-portrait flex md:hidden h-screen flex-col">
         <div className="h-[60%] relative border-b border-gray-600">
           <MTGTimer />
         </div>
         <div className="h-[40%] relative">
+          <PromoSlider />
+        </div>
+      </div>
+
+      {/* Layout para pantallas pequeñas - landscape (imitando desktop lado a lado) */}
+      <div className="only-landscape flex md:hidden h-screen">
+        <div className="w-[61%] relative border-r border-gray-600">
+          <MTGTimer />
+        </div>
+        <div className="w-[39%] relative">
           <PromoSlider />
         </div>
       </div>

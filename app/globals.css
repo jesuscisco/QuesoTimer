@@ -25,6 +25,16 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+/* Orientation helpers: show desktop-like layout on mobile when device is in landscape */
+/* These classes only toggle visibility; keep Tailwind display utilities (flex/block) intact */
+
+@media (orientation: portrait) {
+  .only-landscape { display: none !important; }
+}
+@media (orientation: landscape) {
+  .only-portrait { display: none !important; }
+}
+
 /* Print-friendly styles for pairings/standings */
 @media print {
   html, body {
