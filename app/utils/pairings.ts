@@ -2,7 +2,7 @@
 
 export type Pairings = {
   title: string;
-  mode: 'ffa' | 'twoHeads';
+  mode: 'ffa' | 'twoHeads' | 'oneVsOne';
   tables: string[][]; // array of tables, each table is array of strings (players or team lines)
   generatedAt: number;
 };

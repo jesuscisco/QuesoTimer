@@ -898,6 +898,14 @@ export default function ControlPanel(props: TimerControlProps) {
             >
               2 cabezas
             </button>
+            <button
+              onClick={() => {
+                try { window.open('/torneos/1vs1', '_blank', 'noopener,noreferrer'); } catch {}
+              }}
+              className="px-6 py-4 bg-teal-600 hover:bg-teal-700 rounded-lg font-semibold transition-all duration-200 transform hover:scale-105 shadow-lg"
+            >
+              1 vs 1
+            </button>
           </div>
           {/* Generar tabla acumulada de fechas */}
           <div className="mt-4 border-t border-gray-700 pt-4">

@@ -33,7 +33,7 @@ export default function TournamentEditor({
 }: {
   title: string;
   storageKey: string;
-  mode?: 'ffa' | 'twoHeads';
+  mode?: 'ffa' | 'twoHeads' | 'oneVsOne';
 }) {
   const [name, setName] = useState("");
   const [players, setPlayers] = useState<string[]>([]);
@@ -56,6 +56,9 @@ export default function TournamentEditor({
   const [isSaving, setIsSaving] = useState<boolean>(false);
   type RoundDetail = { round: number; timestamp: number; players: Array<{ name: string; points: number }>; tables: string[][] };
   const [roundsDetail, setRoundsDetail] = useState<RoundDetail[]>([]);
+  // 1vs1 manual pairing builder state
+  const [manualOneVsOne, setManualOneVsOne] = useState<boolean>(false);
+  const [manualPick, setManualPick] = useState<string[]>([]);
 
   useEffect(() => {
     try {
@@ -437,6 +440,49 @@ export default function TournamentEditor({
     try { localStorage.setItem(PENDING_KEY, '1'); setPendingRound(true); } catch {}
   }
 
+  // OneVsOne: generate 1v1 matches by standings adjacency
+  function generateOneVsOneRoundFromStandings(roundNumber: number) {
+    const list = players.map((p) => p.trim()).filter(Boolean);
+    if (list.length < 2) {
+      setErrorMsg('no hay suficientes jugadores registrados');
+      return;
+    }
+    if (pendingRound) {
+      alert('Debes guardar los resultados de la ronda actual antes de generar la siguiente.');
+      return;
+    }
+    // order by current standings
+    const standings = buildStandingsFromRounds();
+    const order = standings
+      .map((s) => s.name)
+      .filter((nm) => list.some((p) => p === nm));
+    // ensure any players without standings are appended
+    const unseen = list.filter((p) => !order.includes(p));
+    const ordered = [...order, ...unseen];
+    
+    // create 1v1 matches: pair adjacent players
+    const result: string[][] = [];
+    for (let i = 0; i < ordered.length; i += 2) {
+      if (i + 1 < ordered.length) {
+        result.push([ordered[i], ordered[i + 1]]);
+      } else {
+        // odd number of players, one bye
+        result.push([ordered[i] + ' (bye)']);
+        setNotice('Aviso: número impar de jugadores, un jugador recibe bye.');
+      }
+    }
+    
+    if (ordered.length % 2 === 0) {
+      setNotice('');
+    }
+    
+    setTables(result);
+    try {
+      setCurrentPairings({ title: `${title} — Ronda ${roundNumber}`, mode: 'oneVsOne', tables: result, generatedAt: Date.now() });
+    } catch {}
+    try { localStorage.setItem(PENDING_KEY, '1'); setPendingRound(true); } catch {}
+  }
+
   function startTournament() {
     const list = players.map((p) => p.trim()).filter(Boolean);
     if (list.length === 0) {
@@ -445,6 +491,12 @@ export default function TournamentEditor({
       return;
     }
     const shuffled = shuffle(list);
+    // If manual mode active for oneVsOne and R1 not yet generated, do not auto-generate
+    if (mode === 'oneVsOne' && manualOneVsOne) {
+      setNotice('Modo manual activo: arma los enfrentamientos seleccionando jugadores de a pares.');
+      setTables([]);
+      return;
+    }
     if (mode === 'twoHeads') {
       // Form teams of 2
       const teams: string[][] = [];
@@ -474,6 +526,25 @@ export default function TournamentEditor({
       setTables(result);
       try {
         setCurrentPairings({ title, mode: 'twoHeads', tables: result, generatedAt: Date.now() });
+      } catch {}
+    } else if (mode === 'oneVsOne') {
+      // Create 1v1 matches
+      const result: string[][] = [];
+      for (let i = 0; i < shuffled.length; i += 2) {
+        if (i + 1 < shuffled.length) {
+          result.push([shuffled[i], shuffled[i + 1]]);
+        } else {
+          // odd number of players, one bye
+          result.push([shuffled[i] + ' (bye)']);
+          setNotice('Aviso: número impar de jugadores, un jugador recibe bye.');
+        }
+      }
+      if (shuffled.length % 2 === 0) {
+        setNotice('');
+      }
+      setTables(result);
+      try {
+        setCurrentPairings({ title, mode: 'oneVsOne', tables: result, generatedAt: Date.now() });
       } catch {}
     } else {
       const { groupsOf4, groupsOf3, fallback } = computeGroups(shuffled.length);
@@ -554,7 +625,7 @@ export default function TournamentEditor({
           rows.push({
             Ronda: 0, // temp, will fill after round number computed
             Titulo: title,
-            Modo: mode === 'twoHeads' ? 'twoHeads' : 'ffa',
+            Modo: mode === 'twoHeads' ? 'twoHeads' : (mode === 'oneVsOne' ? 'oneVsOne' : 'ffa'),
             Mesa: ti + 1,
             Puesto: pos + 1,
             Participante: participante,
@@ -588,7 +659,7 @@ export default function TournamentEditor({
       const entry = {
         round: roundNumber,
         title,
-        mode: mode === 'twoHeads' ? 'twoHeads' : 'ffa',
+        mode: mode,
         timestamp: time,
         tablesSnapshot: tables,
         placements,
@@ -881,6 +952,63 @@ export default function TournamentEditor({
                 )}
               </>
             )}
+            {mode === 'oneVsOne' && (
+              <>
+                {roundsSavedCount === 0 && !pendingRound && tables.length === 0 && (
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => {
+                        const list = players.map((p)=>p.trim()).filter(Boolean);
+                        if (list.length < 2) { setErrorMsg('no hay suficientes jugadores registrados'); return; }
+                        // Generar Ronda 1 aleatoria 1vs1
+                        startTournament();
+                        try { localStorage.setItem(PENDING_KEY, '1'); setPendingRound(true); } catch {}
+                      }}
+                      className="px-3 py-1.5 rounded bg-blue-600 hover:bg-blue-700 text-sm"
+                    >
+                      Generar Ronda 1 (aleatoria)
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (pendingRound) { alert('Debes guardar los resultados de la ronda actual antes de generar una nueva.'); return; }
+                        setManualOneVsOne(true);
+                        setTables([]);
+                        setManualPick([]);
+                        setNotice('Modo manual 1vs1 activo: selecciona 2 jugadores para crear un enfrentamiento.');
+                      }}
+                      className="px-3 py-1.5 rounded bg-teal-700 hover:bg-teal-800 text-sm"
+                      title="Construir pareos manualmente"
+                    >
+                      Emparejamiento manual (1vs1)
+                    </button>
+                  </div>
+                )}
+                {roundsSavedCount >= 1 && roundsSavedCount < roundsTotal && !pendingRound && (
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => {
+                        const next = roundsSavedCount + 1;
+                        generateOneVsOneRoundFromStandings(next);
+                      }}
+                      className="px-3 py-1.5 rounded bg-purple-600 hover:bg-purple-700 text-sm"
+                    >
+                      Generar siguiente ronda (auto)
+                    </button>
+                    <button
+                      onClick={() => {
+                        setManualOneVsOne(true);
+                        setTables([]);
+                        setManualPick([]);
+                        setNotice(`Modo manual 1vs1 activo para Ronda ${roundsSavedCount + 1}: selecciona 2 jugadores para crear un enfrentamiento.`);
+                      }}
+                      className="px-3 py-1.5 rounded bg-teal-700 hover:bg-teal-800 text-sm"
+                    >
+                      Emparejamiento manual (1vs1)
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
           </div>
         </div>
 
@@ -904,6 +1032,161 @@ export default function TournamentEditor({
             </ul>
           )}
         </div>
+
+        {/* 1vs1 manual pairing builder */}
+        {mode === 'oneVsOne' && manualOneVsOne && !pendingRound && (
+          <div className="bg-gray-800 border border-teal-700 rounded-lg p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-lg font-semibold text-teal-300">Constructor de emparejamientos (1vs1)</h2>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    // confirm pairings
+                    const allPlayers = players.map((p)=>p.trim()).filter(Boolean);
+                    const used = new Set<string>();
+                    tables.forEach((tbl) => {
+                      tbl.forEach((line) => {
+                        const nm = line.replace(/\s*\(bye\)\s*$/i, '').trim();
+                        if (nm) used.add(nm);
+                      });
+                    });
+                    // all players must be used, except optionally one bye
+                    const available = allPlayers.filter((p) => !used.has(p));
+                    if (manualPick.length > 0) {
+                      alert('Tienes un jugador seleccionado sin asignar. Empareja o asigna bye antes de confirmar.');
+                      return;
+                    }
+                    if (available.length > 0) {
+                      alert('Faltan jugadores por emparejar.');
+                      return;
+                    }
+                    // lock as pending and publish pairings
+                    const nextRound = roundsSavedCount + 1;
+                    setNotice(`Ronda ${nextRound}: pareos configurados manualmente.`);
+                    try { setCurrentPairings({ title: `${title} — Ronda ${nextRound}`, mode: 'oneVsOne', tables, generatedAt: Date.now() }); } catch {}
+                    try { localStorage.setItem(PENDING_KEY, '1'); setPendingRound(true); } catch {}
+                    setManualOneVsOne(false);
+                  }}
+                  disabled={tables.length === 0}
+                  className={`px-3 py-1.5 rounded text-sm ${tables.length === 0 ? 'bg-gray-700 cursor-not-allowed' : 'bg-teal-600 hover:bg-teal-700'}`}
+                >
+                  Confirmar pareos
+                </button>
+                <button
+                  onClick={() => { setManualOneVsOne(false); setManualPick([]); setTables([]); setNotice(''); }}
+                  className="px-3 py-1.5 rounded bg-gray-600 hover:bg-gray-700 text-sm"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+            {/* Available players and current pairs */}
+            {(() => {
+              const usedNow = new Set<string>();
+              tables.forEach((tbl) => tbl.forEach((line) => usedNow.add(line.replace(/\s*\(bye\)\s*$/i, '').trim())));
+              const available = players.map((p)=>p.trim()).filter(Boolean).filter((p) => !usedNow.has(p) && !manualPick.includes(p));
+              return (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <div className="text-sm text-gray-300 mb-2">Jugadores disponibles ({available.length})</div>
+                    {available.length === 0 ? (
+                      <div className="text-xs text-gray-500">No hay jugadores disponibles.</div>
+                    ) : (
+                      <div className="flex flex-wrap gap-2">
+                        {available.map((p) => (
+                          <button
+                            key={p}
+                            onClick={() => {
+                              setManualPick((prev) => {
+                                if (prev.includes(p)) return prev;
+                                const next = [...prev, p].slice(0, 2);
+                                if (next.length === 2) {
+                                  // create a pair (idempotent)
+                                  setTables((prevTables) => {
+                                    const a = next[0];
+                                    const b = next[1];
+                                    const exists = prevTables.some((tbl) => (
+                                      tbl.length === 2 && (
+                                        (tbl[0] === a && tbl[1] === b) || (tbl[0] === b && tbl[1] === a)
+                                      )
+                                    ));
+                                    if (exists) return prevTables;
+                                    return [...prevTables, [a, b]];
+                                  });
+                                  return [];
+                                }
+                                return next;
+                              });
+                            }}
+                            className="px-3 py-1.5 rounded bg-gray-700 hover:bg-gray-600 text-sm"
+                          >
+                            {p}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    <div className="mt-3">
+                      <div className="text-sm text-gray-300 mb-1">Selección actual ({manualPick.length}/2)</div>
+                      <div className="flex flex-wrap gap-2">
+                        {manualPick.map((p) => (
+                          <span key={p} className="px-2 py-1 bg-indigo-700 rounded text-xs">{p}</span>
+                        ))}
+                        {manualPick.length === 1 && (
+                          <button
+                            onClick={() => {
+                              const p = manualPick[0];
+                              setTables((prev) => {
+                                const exists = prev.some((tbl) => tbl.length === 1 && tbl[0].replace(/\s*\(bye\)\s*$/i,'').trim() === p);
+                                if (exists) return prev;
+                                return [...prev, [`${p} (bye)`]];
+                              });
+                              setManualPick([]);
+                            }}
+                            className="px-2 py-1 bg-yellow-700 hover:bg-yellow-800 rounded text-xs"
+                            title="Asignar bye al jugador seleccionado"
+                          >
+                            Asignar bye
+                          </button>
+                        )}
+                        {manualPick.length > 0 && (
+                          <button
+                            onClick={() => setManualPick([])}
+                            className="px-2 py-1 bg-gray-600 hover:bg-gray-700 rounded text-xs"
+                          >
+                            Limpiar selección
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-sm text-gray-300 mb-2">Pareos actuales ({tables.length})</div>
+                    {tables.length === 0 ? (
+                      <div className="text-xs text-gray-500">Aún no hay mesas creadas.</div>
+                    ) : (
+                      <div className="space-y-2">
+                        {tables.map((tbl, i) => (
+                          <div key={i} className="flex items-center justify-between bg-gray-900 border border-gray-700 rounded px-3 py-2">
+                            <div className="text-sm text-gray-200 truncate">Mesa {i+1}: {tbl.join(' vs ')}</div>
+                            <button
+                              onClick={() => {
+                                // remove table i
+                                setTables((prev) => prev.filter((_, idx) => idx !== i));
+                              }}
+                              className="text-xs px-2 py-1 bg-red-600 hover:bg-red-700 rounded"
+                            >
+                              Quitar
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+        )}
 
         {tables.length > 0 && (
           <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
@@ -932,7 +1215,7 @@ export default function TournamentEditor({
                     onClick={() => {
                       try {
                         // Ensure current pairings reflect current view
-                        setCurrentPairings({ title, mode: mode === 'twoHeads' ? 'twoHeads' : 'ffa', tables, generatedAt: Date.now() });
+                        setCurrentPairings({ title, mode, tables, generatedAt: Date.now() });
                       } catch {}
                       setPairingsModalOpen(true); // optimistic
                       try { broadcast('showModal', { type: 'pairings' }); } catch {}
@@ -991,6 +1274,25 @@ export default function TournamentEditor({
                                     }
                                   }
                                   copy[i][pos] = Number.isNaN(v) ? -1 : v;
+                                  // Auto-asignar segundo lugar en 1vs1 cuando se selecciona el primero
+                                  if (mode === 'oneVsOne' && table.length === 2) {
+                                    // Si ya se eligió primer lugar y aún no se asignó segundo, completarlo automáticamente
+                                    const firstIdx = copy[i][0];
+                                    if (firstIdx !== -1) {
+                                      const otherIdx = firstIdx === 0 ? 1 : 0;
+                                      // Solo asignar si el segundo lugar está vacío o apunta al mismo jugador que el primero
+                                      if (copy[i][1] === -1 || copy[i][1] === firstIdx) {
+                                        copy[i][1] = otherIdx;
+                                      }
+                                      // Si el usuario seleccionó primero el segundo lugar, y luego el primero, asegurar coherencia
+                                      if (pos === 1 && copy[i][1] !== -1 && copy[i][0] !== -1) {
+                                        // Recalcular por si se invierte orden manualmente
+                                        const f = copy[i][0];
+                                        const expectedSecond = f === 0 ? 1 : 0;
+                                        copy[i][1] = expectedSecond;
+                                      }
+                                    }
+                                  }
                                   return copy;
                                 });
                               }}
