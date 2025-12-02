@@ -28,6 +28,12 @@ interface AppStore {
   customAlertFired: boolean;
   audioUnlocked: boolean;
   
+  // Ads Slider State (independent fullscreen anuncios)
+  adsCurrentSlide: number;
+  adsTotalSlides: number;
+  adsIsSliderTransitioning: boolean;
+  adsAutoSlidePaused: boolean;
+  
   // Timer Actions
   startTimer: () => void;
   pauseTimer: () => void;
@@ -45,6 +51,15 @@ interface AppStore {
   pauseAutoSlide: () => void;
   resumeAutoSlide: () => void;
   toggleAutoSlide: () => void;
+  
+  // Ads Slider Actions
+  adsNextSlide: () => void;
+  adsPrevSlide: () => void;
+  adsGoToSlide: (slideIndex: number) => void;
+  setAdsTotalSlides: (n: number) => void;
+  adsPauseAutoSlide: () => void;
+  adsResumeAutoSlide: () => void;
+  adsToggleAutoSlide: () => void;
   
   // Custom alert actions
   setCustomAlert: (minutes: number, seconds: number) => void;
@@ -80,6 +95,12 @@ export const useAppStore = create<AppStore>((set, get) => ({
   customAlertSeconds: null,
   customAlertFired: false,
   audioUnlocked: false,
+  
+  // Ads initial state
+  adsCurrentSlide: 1,
+  adsTotalSlides: 0,
+  adsIsSliderTransitioning: false,
+  adsAutoSlidePaused: false,
   
   // Timer Actions
   startTimer: () => {
@@ -234,6 +255,52 @@ export const useAppStore = create<AppStore>((set, get) => ({
   pauseAutoSlide: () => set({ autoSlidePaused: true }),
   resumeAutoSlide: () => set({ autoSlidePaused: false }),
   toggleAutoSlide: () => set((s) => ({ autoSlidePaused: !s.autoSlidePaused })),
+  
+  // Ads Slider Actions
+  adsNextSlide: () => {
+    const { adsCurrentSlide, adsTotalSlides, adsIsSliderTransitioning } = get();
+    if (adsIsSliderTransitioning) return;
+    const newSlide = adsCurrentSlide >= adsTotalSlides ? 1 : adsCurrentSlide + 1;
+    get().adsGoToSlide(newSlide);
+  },
+  adsPrevSlide: () => {
+    const { adsCurrentSlide, adsTotalSlides, adsIsSliderTransitioning } = get();
+    if (adsIsSliderTransitioning) return;
+    const newSlide = adsCurrentSlide <= 1 ? adsTotalSlides : adsCurrentSlide - 1;
+    get().adsGoToSlide(newSlide);
+  },
+  adsGoToSlide: (slideIndex: number) => {
+    const { adsCurrentSlide, adsTotalSlides, adsIsSliderTransitioning } = get();
+    if (adsIsSliderTransitioning || slideIndex === adsCurrentSlide) return;
+    if (slideIndex < 1 || slideIndex > adsTotalSlides) return;
+    set({ adsIsSliderTransitioning: true });
+    const allSlides = document.querySelectorAll('.slider--el');
+    allSlides.forEach(slide => {
+      (slide as HTMLElement).style.display = 'block';
+      (slide as HTMLElement).offsetTop;
+    });
+    const activeSlide = document.querySelector('.slider--el.active');
+    if (activeSlide) activeSlide.classList.add('removed');
+    const nextSlideEl = document.querySelector(`.slider--el-${slideIndex}`);
+    if (nextSlideEl) nextSlideEl.classList.add('next');
+    setTimeout(() => {
+      const removedSlides = document.querySelectorAll('.slider--el.removed');
+      removedSlides.forEach(slide => { (slide as HTMLElement).style.display = 'none'; });
+      allSlides.forEach(slide => { slide.classList.remove('active', 'next', 'removed'); });
+      const newActiveSlide = document.querySelector(`.slider--el-${slideIndex}`);
+      if (newActiveSlide) newActiveSlide.classList.add('active');
+      set({ adsCurrentSlide: slideIndex, adsIsSliderTransitioning: false });
+    }, 1800);
+  },
+  setAdsTotalSlides: (n: number) => {
+    set((state) => ({
+      adsTotalSlides: n,
+      adsCurrentSlide: n === 0 ? 1 : Math.min(Math.max(1, state.adsCurrentSlide), n),
+    }));
+  },
+  adsPauseAutoSlide: () => set({ adsAutoSlidePaused: true }),
+  adsResumeAutoSlide: () => set({ adsAutoSlidePaused: false }),
+  adsToggleAutoSlide: () => set((s) => ({ adsAutoSlidePaused: !s.adsAutoSlidePaused })),
   
   // Custom alert controls
   setCustomAlert: (minutes: number, seconds: number) => set({

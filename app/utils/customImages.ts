@@ -19,12 +19,28 @@ export type ModalImage = {
 };
 
 const STORAGE_KEY = 'customSliderImages.v1';
+// Separate storage for anuncios (ads) slider images
+const ADS_STORAGE_KEY = 'customSliderImagesAds.v1';
 const MODAL_IMG_KEY = 'customSliderModalImage.v1';
 
 export function getCustomImages(): CustomImage[] {
   if (typeof window === 'undefined') return [];
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return [];
+    const arr = JSON.parse(raw);
+    if (!Array.isArray(arr)) return [];
+    return arr.filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+// Ads variants
+export function getCustomImagesAds(): CustomImage[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(ADS_STORAGE_KEY);
     if (!raw) return [];
     const arr = JSON.parse(raw);
     if (!Array.isArray(arr)) return [];
@@ -41,9 +57,21 @@ export function setCustomImages(images: CustomImage[]) {
   } catch {}
 }
 
+export function setCustomImagesAds(images: CustomImage[]) {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(ADS_STORAGE_KEY, JSON.stringify(images));
+  } catch {}
+}
+
 export function addCustomImages(newImages: CustomImage[]) {
   const current = getCustomImages();
   setCustomImages([...current, ...newImages]);
+}
+
+export function addCustomImagesAds(newImages: CustomImage[]) {
+  const current = getCustomImagesAds();
+  setCustomImagesAds([...current, ...newImages]);
 }
 
 export function removeCustomImage(id: string) {
@@ -51,8 +79,17 @@ export function removeCustomImage(id: string) {
   setCustomImages(current.filter((img) => img.id !== id));
 }
 
+export function removeCustomImageAds(id: string) {
+  const current = getCustomImagesAds();
+  setCustomImagesAds(current.filter((img) => img.id !== id));
+}
+
 export function clearCustomImages() {
   setCustomImages([]);
+}
+
+export function clearCustomImagesAds() {
+  setCustomImagesAds([]);
 }
 
 // Resize an image file to a max dimension and return a JPEG data URL
@@ -124,11 +161,21 @@ function dataURItoBlob(dataURI: string): Blob {
 }
 
 const CUSTOM_CACHE = 'mtg-custom-slider-v1';
+const ADS_CUSTOM_CACHE = 'mtg-custom-ads-v1';
 
 export async function cacheCustomImage(id: string, blob: Blob, contentType = 'image/jpeg'): Promise<string> {
   if (typeof caches === 'undefined') throw new Error('Cache Storage not available');
   const cachePath = `/custom-slider/${id}.jpg`;
   const cache = await caches.open(CUSTOM_CACHE);
+  const res = new Response(blob, { headers: { 'Content-Type': contentType } });
+  await cache.put(new Request(cachePath, { method: 'GET' }), res);
+  return cachePath;
+}
+
+export async function cacheCustomAdsImage(id: string, blob: Blob, contentType = 'image/jpeg'): Promise<string> {
+  if (typeof caches === 'undefined') throw new Error('Cache Storage not available');
+  const cachePath = `/custom-ads/${id}.jpg`;
+  const cache = await caches.open(ADS_CUSTOM_CACHE);
   const res = new Response(blob, { headers: { 'Content-Type': contentType } });
   await cache.put(new Request(cachePath, { method: 'GET' }), res);
   return cachePath;
@@ -146,6 +193,12 @@ export async function cacheModalImage(blob: Blob, contentType = 'image/jpeg'): P
 export async function deleteCachedCustomImage(cachePath: string): Promise<boolean> {
   if (typeof caches === 'undefined') return false;
   const cache = await caches.open(CUSTOM_CACHE);
+  return cache.delete(new Request(cachePath));
+}
+
+export async function deleteCachedCustomAdsImage(cachePath: string): Promise<boolean> {
+  if (typeof caches === 'undefined') return false;
+  const cache = await caches.open(ADS_CUSTOM_CACHE);
   return cache.delete(new Request(cachePath));
 }
 
@@ -179,6 +232,30 @@ export async function ensureCustomImagesDataUrls(): Promise<CustomImage[]> {
       } catch {}
     }
     if (changed) setCustomImages(imgs);
+  } catch {}
+  return imgs;
+}
+
+export async function ensureCustomImagesAdsDataUrls(): Promise<CustomImage[]> {
+  const imgs = getCustomImagesAds();
+  if (typeof caches === 'undefined') return imgs;
+  const needs = imgs.filter((i) => !i.dataUrl && i.cachePath);
+  if (needs.length === 0) return imgs;
+  try {
+    const cache = await caches.open(ADS_CUSTOM_CACHE);
+    let changed = false;
+    for (const img of needs) {
+      try {
+        const req = new Request(img.cachePath!);
+        const res = await cache.match(req);
+        if (res) {
+          const blob = await res.blob();
+          img.dataUrl = await blobToDataUrl(blob);
+          changed = true;
+        }
+      } catch {}
+    }
+    if (changed) setCustomImagesAds(imgs);
   } catch {}
   return imgs;
 }

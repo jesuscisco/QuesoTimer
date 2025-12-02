@@ -22,7 +22,12 @@ type BroadcastMessage = {
   | 'unlockAudio'
   | 'setTitle'
   | 'showModal'
-  | 'hideModal';
+  | 'hideModal'
+  // Ads actions
+  | 'ads_nextSlide'
+  | 'ads_prevSlide'
+  | 'ads_goToSlide'
+  | 'ads_toggleAuto';
   payload?: any;
 };
 

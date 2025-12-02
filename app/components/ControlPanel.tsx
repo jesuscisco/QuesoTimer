@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { playWarning, playOver } from '../utils/sound';
-import { getCustomImages, addCustomImages, removeCustomImage, fileToResizedBlob, cacheCustomImage, deleteCachedCustomImage, blobToDataUrl, ensureCustomImagesDataUrls, makeId, getModalImage, setModalImage, cacheModalImage, ensureModalImageDataUrl, type CustomImage, type ModalImage } from '../utils/customImages';
+import { getCustomImages, addCustomImages, removeCustomImage, fileToResizedBlob, cacheCustomImage, deleteCachedCustomImage, blobToDataUrl, ensureCustomImagesDataUrls, makeId, getModalImage, setModalImage, cacheModalImage, ensureModalImageDataUrl, type CustomImage, type ModalImage, getCustomImagesAds, addCustomImagesAds, ensureCustomImagesAdsDataUrls, cacheCustomAdsImage, deleteCachedCustomAdsImage, removeCustomImageAds } from '../utils/customImages';
 import { getCurrentPairings } from '../utils/pairings';
 import { getCurrentStandings } from '../utils/standings';
 import { subscribe } from '../utils/broadcast';
@@ -19,6 +19,11 @@ interface TimerControlProps {
   onPrevSlide: () => void;
   onGoToSlide: (slideIndex: number) => void;
   onToggleAutoSlide: () => void;
+  // Ads slider controls
+  onAdsNextSlide: () => void;
+  onAdsPrevSlide: () => void;
+  onAdsGoToSlide: (slideIndex: number) => void;
+  onAdsToggleAutoSlide: () => void;
   onShowSliderModal: (image?: string) => void;
   onShowSliderModalPairings: () => void;
   onShowSliderModalStandings: () => void;
@@ -36,6 +41,10 @@ interface TimerControlProps {
   currentSlide: number;
   totalSlides: number;
   autoSlidePaused: boolean;
+  // Ads slider state
+  adsCurrentSlide: number;
+  adsTotalSlides: number;
+  adsAutoSlidePaused: boolean;
   customAlertSeconds: number | null;
   currentTitle: string;
 }
@@ -53,7 +62,9 @@ export default function ControlPanel(props: TimerControlProps) {
   });
   const [images, setImages] = useState<string[]>([]);
   const [customImages, setCustomImages] = useState<CustomImage[]>([]);
+  const [adsCustomImages, setAdsCustomImages] = useState<CustomImage[]>([]);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const adsFileInputRef = useRef<HTMLInputElement | null>(null);
   const modalFileRef = useRef<HTMLInputElement | null>(null);
   const [modalImage, setModalImageState] = useState<ModalImage | null>(null);
   const [isOnline, setIsOnline] = useState<boolean>(typeof navigator !== 'undefined' ? navigator.onLine : true);
@@ -245,6 +256,35 @@ export default function ControlPanel(props: TimerControlProps) {
     return () => { mounted = false; window.removeEventListener('storage', onStorage); };
   }, []);
 
+  // Cargar imágenes para anuncios (solo personalizadas)
+  useEffect(() => {
+    let mounted = true;
+    const loadAds = async () => {
+      try {
+        let custom = getCustomImagesAds();
+        try { custom = await ensureCustomImagesAdsDataUrls(); } catch {}
+        if (!mounted) return;
+        setAdsCustomImages(custom);
+      } catch {
+        let custom = getCustomImagesAds();
+        try { custom = await ensureCustomImagesAdsDataUrls(); } catch {}
+        if (!mounted) return;
+        setAdsCustomImages(custom);
+      }
+    };
+    loadAds();
+    const onStorage = (e: StorageEvent) => {
+      if (e.key && e.key.startsWith('customSliderImagesAds')) {
+        ensureCustomImagesAdsDataUrls().then((updated) => setAdsCustomImages(updated)).catch(() => {
+          const next = getCustomImagesAds();
+          setAdsCustomImages(next);
+        });
+      }
+    };
+    window.addEventListener('storage', onStorage);
+    return () => { mounted = false; window.removeEventListener('storage', onStorage); };
+  }, []);
+
   // Cargar conteo de pareos actuales y escuchar cambios
   useEffect(() => {
     const loadPairings = () => {
@@ -416,6 +456,15 @@ export default function ControlPanel(props: TimerControlProps) {
               title="Abrir pantalla del Timer y Slider"
             >
               Abrir pantalla
+            </button>
+            <button
+              onClick={() => {
+                try { window.open('/anuncios', '_blank', 'noopener,noreferrer'); } catch {}
+              }}
+              className="px-3 py-1.5 rounded-md border text-xs transition-colors bg-pink-700 hover:bg-pink-800 border-pink-600"
+              title="Abrir pantalla de anuncios (slider independiente)"
+            >
+              Abrir anuncios
             </button>
           </div>
         </div>
@@ -835,6 +884,149 @@ export default function ControlPanel(props: TimerControlProps) {
               ) : (
                 <div className="text-sm text-gray-400">No hay imágenes personalizadas.</div>
               )}
+            </div>
+          </div>
+        </div>
+
+        {/* Pantalla de anuncios */}
+        <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
+          <h2 className="text-xl font-semibold mb-4 text-fuchsia-400">Pantalla de anuncios</h2>
+
+          <div className="space-y-4">
+            {/* Preview del slide actual de anuncios */}
+            <div className="flex items-center gap-4">
+              <div className="text-sm text-gray-300 min-w-24">Preview actual</div>
+              <div className="flex-1">
+                <div className="w-full max-w-sm aspect-video bg-gray-700/60 border border-gray-600 rounded-md overflow-hidden">
+                  {adsCustomImages[props.adsCurrentSlide - 1] ? (
+                    <img
+                      src={adsCustomImages[props.adsCurrentSlide - 1].dataUrl || adsCustomImages[props.adsCurrentSlide - 1].cachePath}
+                      alt={`Anuncio ${props.adsCurrentSlide}`}
+                      className="w-full h-full object-contain"
+                    />)
+                  : (
+                    <div className="w-full h-full grid place-items-center text-gray-400 text-sm">
+                      Sin imagen
+                    </div>
+                  )}
+                </div>
+                <div className="mt-1 text-xs text-gray-400">
+                  Mostrando {props.adsCurrentSlide} / {props.adsTotalSlides}
+                </div>
+                {/* Gestión de imágenes de anuncios */}
+                <div className="border-t border-gray-600 pt-4">
+                  <h4 className="text-md font-medium text-gray-300 mb-3">Imágenes de anuncios</h4>
+                  <div className="flex flex-wrap items-center gap-3 mb-3">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      ref={adsFileInputRef}
+                      className="hidden"
+                      onChange={async (e) => {
+                        const files = Array.from(e.target.files || []);
+                        if (!files.length) return;
+                        const added: CustomImage[] = [];
+                        for (const f of files) {
+                          try {
+                            const id = makeId();
+                            const blob = await fileToResizedBlob(f, { maxW: 1600, maxH: 1600, quality: 0.85 });
+                            const cachePath = await cacheCustomAdsImage(id, blob, blob.type || 'image/jpeg');
+                            let dataUrl: string | undefined;
+                            try { dataUrl = await blobToDataUrl(blob); } catch {}
+                            added.push({ id, name: f.name, cachePath, dataUrl, addedAt: Date.now() });
+                          } catch {}
+                        }
+                        if (added.length) {
+                          addCustomImagesAds(added);
+                          const next = getCustomImagesAds();
+                          setAdsCustomImages(next);
+                          // Touch storage key so other tabs update quickly
+                          try { localStorage.setItem('customSliderImagesAds.touch', String(Date.now())); } catch {}
+                          if (adsFileInputRef.current) adsFileInputRef.current.value = '';
+                        }
+                      }}
+                    />
+                    <button
+                      onClick={() => adsFileInputRef.current?.click()}
+                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg font-medium transition-all duration-200"
+                    >
+                      📁 Selecciona imagen
+                    </button>
+                    <span className="text-xs text-gray-400">Estas imágenes solo se usan en la pantalla de anuncios.</span>
+                  </div>
+                  {adsCustomImages.length > 0 ? (
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                      {adsCustomImages.map((img) => (
+                        <div key={img.id} className="bg-gray-700 rounded-md border border-gray-600 overflow-hidden">
+                          <div className="aspect-video w-full bg-gray-800">
+                            <img src={img.dataUrl || img.cachePath} alt={img.name} className="w-full h-full object-contain" />
+                          </div>
+                          <div className="p-2 flex items-center justify-between gap-2">
+                            <div className="truncate text-xs text-gray-300" title={img.name}>{img.name}</div>
+                            <button
+                              onClick={async () => {
+                                removeCustomImageAds(img.id);
+                                if (img.cachePath) { try { await deleteCachedCustomAdsImage(img.cachePath); } catch {} }
+                                const next = getCustomImagesAds();
+                                setAdsCustomImages(next);
+                              }}
+                              className="text-xs px-2 py-1 bg-red-600 hover:bg-red-700 rounded"
+                            >
+                              Eliminar
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-sm text-gray-400">No hay imágenes de anuncios.</div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-3">
+              <button
+                onClick={props.onAdsPrevSlide}
+                className="px-6 py-3 bg-gray-600 hover:bg-gray-700 rounded-lg font-semibold transition-all duration-200 transform hover:scale-105 shadow-lg"
+              >
+                ⬅️ Anterior
+              </button>
+              
+              <button
+                onClick={props.onAdsNextSlide}
+                className="px-6 py-3 bg-gray-600 hover:bg-gray-700 rounded-lg font-semibold transition-all duration-200 transform hover:scale-105 shadow-lg"
+              >
+                ➡️ Siguiente
+              </button>
+
+              <button
+                onClick={props.onAdsToggleAutoSlide}
+                className={`px-6 py-3 rounded-lg font-semibold transition-all duration-200 transform hover:scale-105 shadow-lg ${props.adsAutoSlidePaused ? 'bg-green-600 hover:bg-green-700' : 'bg-yellow-600 hover:bg-yellow-700'}`}
+              >
+                {props.adsAutoSlidePaused ? '▶️ Reanudar auto' : '⏸️ Pausar auto'}
+              </button>
+            </div>
+
+            {/* Selección directa de anuncio */}
+            <div className="border-t border-gray-600 pt-4">
+              <h4 className="text-md font-medium text-gray-300 mb-3">Ir a Anuncio</h4>
+              <div className="flex flex-wrap gap-2">
+                {Array.from({ length: props.adsTotalSlides }, (_, i) => i + 1).map((slideNum) => (
+                  <button
+                    key={`ads-${slideNum}`}
+                    onClick={() => props.onAdsGoToSlide(slideNum)}
+                    className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
+                      slideNum === props.adsCurrentSlide
+                        ? 'bg-fuchsia-600 text-white'
+                        : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
+                    }`}
+                  >
+                    {slideNum}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         </div>

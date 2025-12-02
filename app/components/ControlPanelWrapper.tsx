@@ -10,6 +10,9 @@ export default function ControlPanelWrapper() {
     currentSlide,
     totalSlides,
     autoSlidePaused,
+    adsCurrentSlide,
+    adsTotalSlides,
+    adsAutoSlidePaused,
     customAlertSeconds,
     timerTitle,
     startTimer,
@@ -23,6 +26,10 @@ export default function ControlPanelWrapper() {
     prevSlide,
     goToSlide,
     toggleAutoSlide,
+  adsNextSlide,
+  adsPrevSlide,
+  adsGoToSlide,
+  adsToggleAutoSlide,
     setCustomAlert,
     clearCustomAlert,
     setTimerTitle,
@@ -45,6 +52,14 @@ export default function ControlPanelWrapper() {
       onPrevSlide={() => { prevSlide(); broadcast('prevSlide'); }}
       onGoToSlide={(idx) => { goToSlide(idx); broadcast('goToSlide', { index: idx }); }}
       onToggleAutoSlide={() => { toggleAutoSlide(); broadcast('toggleAuto'); }}
+  // Ads slider controls
+  adsCurrentSlide={adsCurrentSlide}
+  adsTotalSlides={adsTotalSlides}
+  adsAutoSlidePaused={adsAutoSlidePaused}
+  onAdsNextSlide={() => { adsNextSlide(); broadcast('ads_nextSlide'); }}
+  onAdsPrevSlide={() => { adsPrevSlide(); broadcast('ads_prevSlide'); }}
+  onAdsGoToSlide={(idx: number) => { adsGoToSlide(idx); broadcast('ads_goToSlide', { index: idx }); }}
+  onAdsToggleAutoSlide={() => { adsToggleAutoSlide(); broadcast('ads_toggleAuto'); }}
   onSetCustomAlert={(m: number, s: number) => { setCustomAlert(m, s); broadcast('setCustomAlert', { minutes: m, seconds: s }); }}
       onClearCustomAlert={() => { clearCustomAlert(); broadcast('clearCustomAlert'); }}
       timerState={timer}

@@ -13,6 +13,7 @@ let sliderInterval: NodeJS.Timeout | null = null;
 export default function GlobalEffects() {
   // Activar el hook del timer
   useSimpleTimer();
+  const isAnuncios = typeof window !== 'undefined' && window.location.pathname.startsWith('/anuncios');
   
   useEffect(() => {
     // Sincronizar cantidad de imágenes del slider: API + personalizadas (localStorage)
@@ -64,16 +65,16 @@ export default function GlobalEffects() {
           useAppStore.getState().subtractSeconds(payload?.seconds ?? 0);
           break;
         case 'nextSlide':
-          useAppStore.getState().nextSlide();
+          if (!isAnuncios) useAppStore.getState().nextSlide();
           break;
         case 'prevSlide':
-          useAppStore.getState().prevSlide();
+          if (!isAnuncios) useAppStore.getState().prevSlide();
           break;
         case 'goToSlide':
-          if (typeof payload?.index === 'number') useAppStore.getState().goToSlide(payload.index);
+          if (!isAnuncios && typeof payload?.index === 'number') useAppStore.getState().goToSlide(payload.index);
           break;
         case 'toggleAuto':
-          useAppStore.getState().toggleAutoSlide();
+          if (!isAnuncios) useAppStore.getState().toggleAutoSlide();
           break;
         case 'setCustomAlert':
           if (typeof payload?.minutes === 'number' && typeof payload?.seconds === 'number') {
@@ -115,7 +116,7 @@ export default function GlobalEffects() {
     });
 
     // Inicializar slider auto-advance solo en el cliente
-    if (typeof window !== 'undefined' && !sliderInterval) {
+    if (typeof window !== 'undefined' && !sliderInterval && !isAnuncios) {
       sliderInterval = setInterval(() => {
         const state = useAppStore.getState();
         if (!state.isSliderTransitioning && !state.autoSlidePaused && state.totalSlides > 1) {
