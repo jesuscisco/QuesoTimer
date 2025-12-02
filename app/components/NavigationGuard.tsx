@@ -5,6 +5,8 @@ import { useEffect } from "react";
 function hasPending(): boolean {
   if (typeof window === 'undefined') return false;
   try {
+    // Skip guard if one-time skip flag present
+    if (localStorage.getItem('skipNavigationGuardOnce')) return false;
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i) || '';
       if (key.endsWith('.pendingRound')) {
@@ -19,6 +21,13 @@ function hasPending(): boolean {
 export default function NavigationGuard() {
   useEffect(() => {
     const beforeUnload = (e: BeforeUnloadEvent) => {
+      try {
+        if (localStorage.getItem('skipNavigationGuardOnce')) {
+          // Consume flag and skip confirmation
+          localStorage.removeItem('skipNavigationGuardOnce');
+          return undefined;
+        }
+      } catch {}
       if (hasPending()) {
         e.preventDefault();
         // @ts-ignore: required for cross-browser support
@@ -30,6 +39,12 @@ export default function NavigationGuard() {
     window.addEventListener('beforeunload', beforeUnload);
 
     const onClick = (e: MouseEvent) => {
+      // Skip if one-time skip flag set
+      if (typeof window !== 'undefined') {
+        try {
+          if (localStorage.getItem('skipNavigationGuardOnce')) return;
+        } catch {}
+      }
       if (!hasPending()) return;
       // Capture anchor clicks for internal navigation
       const target = e.target as HTMLElement | null;

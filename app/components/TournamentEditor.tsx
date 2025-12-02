@@ -40,6 +40,8 @@ export default function TournamentEditor({
   const [tables, setTables] = useState<string[][]>([]);
   const [notice, setNotice] = useState<string>("");
   const [placements, setPlacements] = useState<number[][]>([]);
+  // 1vs1 match results (winner + score code) e.g. { winner: 0|1|null, code: '2-0'|'2-1'|'1-0'|'1-1'|'0-0' }
+  const [matchResults, setMatchResults] = useState<Array<{ winner: number | null; code: string }>>([]);
   const TABLES_KEY = `${storageKey}.tables`;
   const NOTICE_KEY = `${storageKey}.notice`;
   const ROUNDS_KEY = `${storageKey}.rounds`;
@@ -112,6 +114,16 @@ export default function TournamentEditor({
   // Reset placements whenever tables change
   useEffect(() => {
     setPlacements(tables.map((tbl) => Array(Math.min(4, tbl.length)).fill(-1)));
+    if (mode === 'oneVsOne') {
+      setMatchResults(tables.map((tbl) => {
+        // bye table (single player) auto-win 1-0
+        if (tbl.length === 1) return { winner: 0, code: '1-0' };
+        if (tbl.length === 2) return { winner: null, code: '' };
+        return { winner: null, code: '' };
+      }));
+    } else {
+      setMatchResults([]);
+    }
   }, [tables]);
 
   // Persist config when roundsTotal or tableSizes change
@@ -588,17 +600,33 @@ export default function TournamentEditor({
       setErrorMsg('No hay mesas para guardar resultados.');
       return;
     }
-    // Check at least one placement selected
-    const anySelected = (placements || []).some((arr, ti) => Array.isArray(arr) && arr.some((v) => v !== -1 && tables[ti] && tables[ti][v] != null));
-    if (!anySelected) {
-      setErrorMsg('Debes seleccionar al menos un resultado antes de guardar.');
-      return;
+    if (mode !== 'oneVsOne') {
+      // Check at least one placement selected for non 1vs1 modes
+      const anySelected = (placements || []).some((arr, ti) => Array.isArray(arr) && arr.some((v) => v !== -1 && tables[ti] && tables[ti][v] != null));
+      if (!anySelected) {
+        setErrorMsg('Debes seleccionar al menos un resultado antes de guardar.');
+        return;
+      }
+    } else {
+      // For 1vs1 ensure every 2-player table has a result
+      const allFilled = tables.every((tbl, i) => {
+        if (tbl.length === 2) {
+          const mr = matchResults[i];
+          return mr && ((mr.code === '1-1' || mr.code === '0-0') || (mr.winner !== null && mr.code));
+        }
+        if (tbl.length === 1) return true; // bye auto handled
+        return true; // unexpected size, ignore
+      });
+      if (!allFilled) {
+        setErrorMsg('Debes ingresar el resultado de cada partida 1vs1 antes de guardar.');
+        return;
+      }
     }
     setIsSaving(true);
     // Build rows from placements + points per player
     const time = Date.now();
-    // New scoring: 1st=4, 2nd=3, 3rd=2, 4th=1
-    const SCORING = [4, 3, 2, 1];
+  // New scoring: 1º=6, 2º=4, 3º=3, 4º=2
+  const SCORING = [6, 4, 3, 2];
     const rows: Array<{ Ronda: number; Titulo: string; Modo: string; Mesa: number; Puesto: number; Participante: string; Puntos: number; Victorias: number; Fecha: string }>
       = [];
     const pointsByPlayer = new Map<string, number>();
@@ -615,38 +643,71 @@ export default function TournamentEditor({
       winsByPlayer.set(n, (winsByPlayer.get(n) || 0) + w);
     };
 
-    tables.forEach((table, ti) => {
-      const p = placements[ti] || [];
-      p.forEach((selIdx, pos) => {
-        if (selIdx !== -1 && table[selIdx] != null) {
-          const participante = table[selIdx];
-          const puntos = SCORING[pos] ?? 0;
-          const victoria = pos === 0 ? 1 : 0;
-          rows.push({
-            Ronda: 0, // temp, will fill after round number computed
-            Titulo: title,
-            Modo: mode === 'twoHeads' ? 'twoHeads' : (mode === 'oneVsOne' ? 'oneVsOne' : 'ffa'),
-            Mesa: ti + 1,
-            Puesto: pos + 1,
-            Participante: participante,
-            Puntos: puntos,
-            Victorias: victoria,
-            Fecha: new Date(time).toLocaleString(),
-          });
-          if (mode === 'twoHeads') {
-            // participante string like "Equipo: A y B" (maybe with suffix)
-            const cleaned = participante.replace(/\s*\(sin oponente\)\s*$/i, '');
-            const m = cleaned.match(/^\s*Equipo:\s*(.+)$/i);
-            const names = m ? m[1].split(/\s+y\s+/i) : [participante];
-            names.forEach((nm) => addPoints(nm, puntos));
-            if (victoria) names.forEach((nm) => addWin(nm, 1));
+    if (mode === 'oneVsOne') {
+      tables.forEach((table, ti) => {
+        if (table.length === 1) {
+          // bye: award win 3 pts, 1 victory
+          const participante = table[0].replace(/\s*\(bye\)\s*$/i, '').trim();
+          rows.push({ Ronda: 0, Titulo: title, Modo: 'oneVsOne', Mesa: ti + 1, Puesto: 1, Participante: participante + ' (bye)', Puntos: 3, Victorias: 1, Fecha: new Date(time).toLocaleString() });
+          addPoints(participante, 3); addWin(participante, 1);
+          return;
+        }
+        if (table.length === 2) {
+          const mr = matchResults[ti];
+          if (!mr || (!mr.code)) return; // should have been validated
+          const pA = table[0];
+          const pB = table[1];
+          if (mr.code === '1-1' || mr.code === '0-0') {
+            // draw: both 1 point
+            rows.push({ Ronda: 0, Titulo: title, Modo: 'oneVsOne', Mesa: ti + 1, Puesto: 1, Participante: pA, Puntos: 1, Victorias: 0, Fecha: new Date(time).toLocaleString() });
+            rows.push({ Ronda: 0, Titulo: title, Modo: 'oneVsOne', Mesa: ti + 1, Puesto: 2, Participante: pB, Puntos: 1, Victorias: 0, Fecha: new Date(time).toLocaleString() });
+            addPoints(pA, 1); addPoints(pB, 1);
           } else {
-            addPoints(participante, puntos);
-            if (victoria) addWin(participante, 1);
+            // win result (2-0,2-1,1-0) winner gets 3, loser 0
+            const winnerIdx = mr.winner;
+            const loserIdx = winnerIdx === 0 ? 1 : 0;
+            const winnerName = table[winnerIdx!];
+            const loserName = table[loserIdx];
+            rows.push({ Ronda: 0, Titulo: title, Modo: 'oneVsOne', Mesa: ti + 1, Puesto: 1, Participante: winnerName + ' (' + mr.code + ')', Puntos: 3, Victorias: 1, Fecha: new Date(time).toLocaleString() });
+            rows.push({ Ronda: 0, Titulo: title, Modo: 'oneVsOne', Mesa: ti + 1, Puesto: 2, Participante: loserName, Puntos: 0, Victorias: 0, Fecha: new Date(time).toLocaleString() });
+            addPoints(winnerName, 3); addWin(winnerName, 1); addPoints(loserName, 0);
           }
         }
       });
-    });
+    } else {
+      // existing multi / twoHeads logic
+      tables.forEach((table, ti) => {
+        const p = placements[ti] || [];
+        p.forEach((selIdx, pos) => {
+          if (selIdx !== -1 && table[selIdx] != null) {
+            const participante = table[selIdx];
+            const puntos = SCORING[pos] ?? 0;
+            const victoria = pos === 0 ? 1 : 0;
+            rows.push({
+              Ronda: 0,
+              Titulo: title,
+              Modo: mode === 'twoHeads' ? 'twoHeads' : 'ffa',
+              Mesa: ti + 1,
+              Puesto: pos + 1,
+              Participante: participante,
+              Puntos: puntos,
+              Victorias: victoria,
+              Fecha: new Date(time).toLocaleString(),
+            });
+            if (mode === 'twoHeads') {
+              const cleaned = participante.replace(/\s*\(sin oponente\)\s*$/i, '');
+              const m = cleaned.match(/^\s*Equipo:\s*(.+)$/i);
+              const names = m ? m[1].split(/\s+y\s+/i) : [participante];
+              names.forEach((nm) => addPoints(nm, puntos));
+              if (victoria) names.forEach((nm) => addWin(nm, 1));
+            } else {
+              addPoints(participante, puntos);
+              if (victoria) addWin(participante, 1);
+            }
+          }
+        });
+      });
+    }
 
     // Persist as a new round in localStorage
     try {
@@ -699,8 +760,10 @@ export default function TournamentEditor({
           })
           .sort((a, b) => b.pts - a.pts || b.omw - a.omw || b.wins - a.wins || b.prf - a.prf || a.name.localeCompare(b.name));
         summary.forEach((row) => aoa.push([row.name, row.pts, Math.round(row.omw * 1000) / 10, row.wins, Math.round(row.prf * 1000) / 10, row.rounds]));
-        const safeTitle = (title || 'Torneo').replace(/[^\w\-]+/g, '_').slice(0, 50);
-        downloadCsv(`${safeTitle}_resultados.csv`, aoa);
+  const safeTitle = (title || 'Torneo').replace(/[^\w\-]+/g, '_').slice(0, 50);
+  const d = new Date();
+  const dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  downloadCsv(`${safeTitle}_${dateStr}_resultados.csv`, aoa);
       }
   } catch {}
     // refresh historical after saving
@@ -1248,65 +1311,87 @@ export default function TournamentEditor({
                       <li key={idx} className="truncate">• {p}</li>
                     ))}
                   </ul>
-                  {/* Resultados: 1ro a 4to si es posible */}
+                  {/* Resultados */}
                   <div className="mt-3 border-t border-gray-800 pt-3">
                     <div className="text-sm text-gray-400 mb-2">Resultados</div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      {Array.from({ length: Math.min(4, table.length) }, (_, pos) => pos).map((pos) => {
-                        const selectedForTable = placements[i] || [];
-                        const used = new Set(selectedForTable.slice(0, pos).filter((x) => x !== -1));
-                        const options = table.map((name, idx) => ({ name, idx })).filter((o) => !used.has(o.idx));
-                        const value = selectedForTable[pos] ?? -1;
-                        return (
-                          <div key={pos} className="flex flex-col sm:flex-row gap-2 sm:items-center min-w-0">
-                            <label className="sm:w-24 w-full text-xs text-gray-400 shrink-0">{pos + 1}º lugar</label>
-                            <select
-                              value={value}
-                              onChange={(e) => {
-                                const v = parseInt(e.target.value, 10);
-                                setPlacements((prev) => {
-                                  const copy = prev.map((arr) => arr.slice());
-                                  if (!copy[i]) copy[i] = Array(Math.min(4, table.length)).fill(-1);
-                                  // remove v from other positions in this table to keep uniqueness
-                                  if (!Number.isNaN(v) && v !== -1) {
-                                    for (let k = 0; k < copy[i].length; k++) {
-                                      if (k !== pos && copy[i][k] === v) copy[i][k] = -1;
-                                    }
-                                  }
-                                  copy[i][pos] = Number.isNaN(v) ? -1 : v;
-                                  // Auto-asignar segundo lugar en 1vs1 cuando se selecciona el primero
-                                  if (mode === 'oneVsOne' && table.length === 2) {
-                                    // Si ya se eligió primer lugar y aún no se asignó segundo, completarlo automáticamente
-                                    const firstIdx = copy[i][0];
-                                    if (firstIdx !== -1) {
-                                      const otherIdx = firstIdx === 0 ? 1 : 0;
-                                      // Solo asignar si el segundo lugar está vacío o apunta al mismo jugador que el primero
-                                      if (copy[i][1] === -1 || copy[i][1] === firstIdx) {
-                                        copy[i][1] = otherIdx;
+                    {mode === 'oneVsOne' && table.length === 2 ? (
+                      <div className="flex flex-col gap-2">
+                        <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+                          <label className="text-xs text-gray-400 sm:w-24">Ganador</label>
+                          <select
+                            value={matchResults[i]?.winner ?? ''}
+                            onChange={(e) => {
+                              const v = e.target.value === '' ? null : Number(e.target.value);
+                              setMatchResults((prev) => prev.map((mr, idx) => idx === i ? { ...mr, winner: v } : mr));
+                            }}
+                            className="bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm text-white"
+                          >
+                            <option value="">— Empate —</option>
+                            <option value={0}>{table[0]}</option>
+                            <option value={1}>{table[1]}</option>
+                          </select>
+                        </div>
+                        <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+                          <label className="text-xs text-gray-400 sm:w-24">Resultado</label>
+                          <select
+                            value={matchResults[i]?.code || ''}
+                            onChange={(e) => {
+                              const code = e.target.value;
+                              setMatchResults((prev) => prev.map((mr, idx) => idx === i ? { ...mr, code } : mr));
+                            }}
+                            className="bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm text-white"
+                          >
+                            <option value="">— Selecciona —</option>
+                            {/* Win codes only valid if winner chosen */}
+                            <option value="2-0" disabled={matchResults[i]?.winner === null}>2-0</option>
+                            <option value="2-1" disabled={matchResults[i]?.winner === null}>2-1</option>
+                            <option value="1-0" disabled={matchResults[i]?.winner === null}>1-0</option>
+                            <option value="1-1">1-1 (Empate)</option>
+                            <option value="0-0">0-0 (Empate)</option>
+                          </select>
+                        </div>
+                        <div className="text-xs text-gray-500">Puntos: Victoria = 3, Empate = 1, Derrota = 0. Bye otorgado automáticamente como 3 puntos.</div>
+                      </div>
+                    ) : mode === 'oneVsOne' && table.length === 1 ? (
+                      <div className="text-xs text-yellow-300">Bye asignado automáticamente (3 puntos).</div>
+                    ) : (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {Array.from({ length: Math.min(4, table.length) }, (_, pos) => pos).map((pos) => {
+                          const selectedForTable = placements[i] || [];
+                          const used = new Set(selectedForTable.slice(0, pos).filter((x) => x !== -1));
+                          const options = table.map((name, idx) => ({ name, idx })).filter((o) => !used.has(o.idx));
+                          const value = selectedForTable[pos] ?? -1;
+                          return (
+                            <div key={pos} className="flex flex-col sm:flex-row gap-2 sm:items-center min-w-0">
+                              <label className="sm:w-24 w-full text-xs text-gray-400 shrink-0">{pos + 1}º lugar</label>
+                              <select
+                                value={value}
+                                onChange={(e) => {
+                                  const v = parseInt(e.target.value, 10);
+                                  setPlacements((prev) => {
+                                    const copy = prev.map((arr) => arr.slice());
+                                    if (!copy[i]) copy[i] = Array(Math.min(4, table.length)).fill(-1);
+                                    if (!Number.isNaN(v) && v !== -1) {
+                                      for (let k = 0; k < copy[i].length; k++) {
+                                        if (k !== pos && copy[i][k] === v) copy[i][k] = -1;
                                       }
-                                      // Si el usuario seleccionó primero el segundo lugar, y luego el primero, asegurar coherencia
-                                      if (pos === 1 && copy[i][1] !== -1 && copy[i][0] !== -1) {
-                                        // Recalcular por si se invierte orden manualmente
-                                        const f = copy[i][0];
-                                        const expectedSecond = f === 0 ? 1 : 0;
-                                        copy[i][1] = expectedSecond;
-                                      }
                                     }
-                                  }
-                                  return copy;
-                                });
-                              }}
-                              className="w-full min-w-0 max-w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm text-white"
-                            >
-                              <option value={-1}>— Sin seleccionar —</option>
-                              {options.map((o) => (
-                                <option key={o.idx} value={o.idx}>{o.name}</option>
-                              ))}
-                            </select>
-                          </div>
-                        );
-                      })}
-                    </div>
+                                    copy[i][pos] = Number.isNaN(v) ? -1 : v;
+                                    return copy;
+                                  });
+                                }}
+                                className="w-full min-w-0 max-w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm text-white"
+                              >
+                                <option value={-1}>— Sin seleccionar —</option>
+                                {options.map((o) => (
+                                  <option key={o.idx} value={o.idx}>{o.name}</option>
+                                ))}
+                              </select>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}
@@ -1404,9 +1489,10 @@ export default function TournamentEditor({
                         Math.round(row.prf * 1000) / 10,
                         row.rounds,
                       ]));
+                      const safeTitle = (title || 'Torneo').replace(/[^\w\-]+/g, '_').slice(0, 50);
                       const d = new Date();
                       const dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-                      downloadCsv(`${dateStr}.csv`, aoa);
+                      downloadCsv(`${safeTitle}_${dateStr}_clasificacion.csv`, aoa);
                     } catch {}
                   }}
                   className="px-3 py-1.5 rounded bg-teal-600 hover:bg-teal-700 text-sm"

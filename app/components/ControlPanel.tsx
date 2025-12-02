@@ -44,6 +44,9 @@ export default function ControlPanel(props: TimerControlProps) {
   const [timeToAdd, setTimeToAdd] = useState<number>(1);
   const [secondsToAdjust, setSecondsToAdjust] = useState<number>(10);
   const [titleInput, setTitleInput] = useState<string>('');
+  const [tournamentModalOpen, setTournamentModalOpen] = useState<boolean>(false);
+  const [tournamentTitle, setTournamentTitle] = useState<string>('Boards and Hobbies');
+  const [tournamentTarget, setTournamentTarget] = useState<string>('');
   const [customTime, setCustomTime] = useState<{ minutes: number; seconds: number }>({
     minutes: 50,
     seconds: 0
@@ -289,7 +292,7 @@ export default function ControlPanel(props: TimerControlProps) {
     return () => { if (unsub) unsub(); };
   }, []);
 
-  // Sync local title input with store value
+  // Sync local title input with store value (kept for internal status display; editing removed)
   useEffect(() => {
     setTitleInput(props.currentTitle || '');
   }, [props.currentTitle]);
@@ -548,22 +551,7 @@ export default function ControlPanel(props: TimerControlProps) {
             </div>
           </div>
 
-          {/* Timer Title */}
-          <div className="flex flex-wrap items-center gap-3 mb-4 ">
-            <label className="text-gray-300 text-sm">Título del Timer:</label>
-            <input
-              type="text"
-              value={titleInput}
-              placeholder="MAGIC TIMER"
-              onChange={(e) => {
-                const v = e.target.value.slice(0, 60);
-                setTitleInput(v);
-                props.onSetTitle(v);
-              }}
-              className="bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white w-80"
-            />
-            <span className="text-xs text-gray-500">Se muestra durante el tiempo ordinario.</span>
-          </div>
+          {/* Timer Title editing removed as requested */}
         </div>
 
         {/* Slider Controls */}
@@ -884,7 +872,9 @@ export default function ControlPanel(props: TimerControlProps) {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <button
               onClick={() => {
-                try { window.open('/torneos/multi', '_blank', 'noopener,noreferrer'); } catch {}
+                setTournamentTarget('/torneos/multi');
+                setTournamentTitle('Boards and Hobbies');
+                setTournamentModalOpen(true);
               }}
               className="px-6 py-4 bg-blue-600 hover:bg-blue-700 rounded-lg font-semibold transition-all duration-200 transform hover:scale-105 shadow-lg"
             >
@@ -892,7 +882,9 @@ export default function ControlPanel(props: TimerControlProps) {
             </button>
             <button
               onClick={() => {
-                try { window.open('/torneos/2cabezas', '_blank', 'noopener,noreferrer'); } catch {}
+                setTournamentTarget('/torneos/2cabezas');
+                setTournamentTitle('Boards and Hobbies');
+                setTournamentModalOpen(true);
               }}
               className="px-6 py-4 bg-purple-600 hover:bg-purple-700 rounded-lg font-semibold transition-all duration-200 transform hover:scale-105 shadow-lg"
             >
@@ -900,13 +892,53 @@ export default function ControlPanel(props: TimerControlProps) {
             </button>
             <button
               onClick={() => {
-                try { window.open('/torneos/1vs1', '_blank', 'noopener,noreferrer'); } catch {}
+                setTournamentTarget('/torneos/1vs1');
+                setTournamentTitle('Boards and Hobbies');
+                setTournamentModalOpen(true);
               }}
               className="px-6 py-4 bg-teal-600 hover:bg-teal-700 rounded-lg font-semibold transition-all duration-200 transform hover:scale-105 shadow-lg"
             >
               1 vs 1
             </button>
           </div>
+          {/* Tournament title modal */}
+          {tournamentModalOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center">
+              <div className="absolute inset-0 bg-black/60" onClick={() => setTournamentModalOpen(false)}></div>
+              <div className="relative z-10 w-[90vw] max-w-md bg-gray-800 border border-gray-700 rounded-lg p-5 shadow-2xl">
+                <h3 className="text-lg font-semibold text-white mb-3">Nombre del torneo</h3>
+                <input
+                  type="text"
+                  value={tournamentTitle}
+                  onChange={(e) => setTournamentTitle(e.target.value.slice(0, 60))}
+                  placeholder="Boards and Hobbies"
+                  className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white"
+                />
+                <div className="text-xs text-gray-400 mt-2">Este nombre se usará como título del timer.</div>
+                <div className="mt-4 flex justify-end gap-2">
+                  <button
+                    onClick={() => setTournamentModalOpen(false)}
+                    className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={() => {
+                      // Guardar título en el store y abrir el torneo seleccionado
+                      props.onSetTitle(tournamentTitle || 'Boards and Hobbies');
+                      // Set one-time skip flag to avoid navigation guard prompt
+                      try { localStorage.setItem('skipNavigationGuardOnce', '1'); } catch {}
+                      setTournamentModalOpen(false);
+                      try { window.open(tournamentTarget || '/torneos/multi', '_blank', 'noopener,noreferrer'); } catch {}
+                    }}
+                    className="px-4 py-2 bg-green-700 hover:bg-green-800 rounded"
+                  >
+                    Continuar
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
           {/* Generar tabla acumulada de fechas */}
           <div className="mt-4 border-t border-gray-700 pt-4">
             <input

@@ -44,7 +44,7 @@ export default function MTGTimer() {
   };
 
   return (
-    <div className={`min-h-screen flex flex-col items-center justify-center relative overflow-hidden transition-all duration-1000 ${getBackgroundClass()}`}>
+  <div className={`min-h-screen flex flex-col items-stretch justify-start relative overflow-hidden transition-all duration-1000 ${getBackgroundClass()}`}>
       {/* Imagen de fondo MTG */}
       <div 
         className="absolute inset-0 opacity-20 bg-cover bg-center bg-no-repeat"
@@ -69,43 +69,38 @@ export default function MTGTimer() {
         ))}
       </div>
 
-      {/* Contenido principal */}
-      <div className="relative z-10 text-center">
-        {/* Título */}
-        <h1 className={`text-2xl md:text-3xl lg:text-4xl xl:text-5xl font-bold mb-4 tracking-wider ${getTextColor()} drop-shadow-2xl`}>
-          {timer.isFirstTimer ? (timerTitle || 'MAGIC TIMER') : timer.isFinished ? 'TIME\'S UP!' : 'OVERTIME'}
-        </h1>
-
-        {/* Display del timer */}
-        <div className={`relative mb-8 ${getTextColor()}`}>
-          <div className="text-6xl md:text-7xl lg:text-8xl xl:text-9xl font-mono font-bold tracking-wider drop-shadow-2xl transform transition-all duration-500 hover:scale-105">
-            <span className="inline-block animate-pulse">
-              {formatTime(timer.minutes, timer.seconds)}
-            </span>
+      {/* Contenido principal con título pegado arriba */}
+      <div className="relative z-10 w-full px-4 pt-4 md:pt-5 lg:pt-6 xl:pt-8 flex flex-col items-center">
+        <div className="flex flex-col items-center gap-4 md:gap-5 lg:gap-6 xl:gap-8">
+          {/* Título */}
+          <h1 className={`text-center text-5xl md:text-6xl lg:text-7xl xl:text-8xl font-bold tracking-wider uppercase ${getTextColor()} drop-shadow-2xl select-none leading-tight`}>
+            {timer.isFirstTimer ? ((timerTitle || 'MAGIC TIMER').toUpperCase()) : timer.isFinished ? "TIME'S UP!" : 'OVERTIME'}
+          </h1>
+          {/* Timer */}
+          <div className="flex flex-col items-center justify-center mt-1 md:mt-6 lg:mt-8 xl:mt-10">
+            <div className="text-[9rem] md:text-[11rem] lg:text-[13rem] xl:text-[15rem] font-mono font-bold tracking-wider drop-shadow-2xl transform transition-all duration-300 leading-none">
+              <span className="inline-block animate-pulse">
+                {formatTime(timer.minutes, timer.seconds)}
+              </span>
+            </div>
+            <div className={`pt-10 text-2xl md:text-3xl lg:text-4xl mt-2 font-semibold ${getTextColor()} opacity-80`}>
+              {timer.isFirstTimer ? 'Tiempo Ordinario' : timer.isFinished ? 'Game Over' : 'Tiempo Extra'}
+            </div>
           </div>
-          
-          {/* Indicador de fase */}
-          <div className={`text-lg md:text-xl lg:text-2xl mt-2 font-semibold ${getTextColor()} opacity-80`}>
-            {timer.isFirstTimer ? 'Tiempo Ordinario' : timer.isFinished ? 'Game Over' : 'Tiempo Extra'}
+          {/* Estado */}
+          <div className="flex flex-col items-center gap-2">
+            <div className={`px-6 py-3 rounded-full ${getTextColor()} bg-black/30 text-lg font-semibold backdrop-blur-sm`}>
+              {timer.isRunning ? '▶ En curso' : timer.isFinished ? '⏹ Terminado' : '⏸ Pausado'}
+            </div>
           </div>
-        </div>
-
-        {/* Status visual - sin controles + debug */}
-        <div className="flex flex-col items-center gap-2">
-          <div className={`px-6 py-3 rounded-full ${getTextColor()} bg-black bg-opacity-30 text-lg font-semibold`}>
-            {timer.isRunning ? '▶ En curso' : timer.isFinished ? '⏹ Terminado' : '⏸ Pausado'}
+          {/* Info adicional */}
+          <div className={`text-base md:text-lg lg:text-xl ${getTextColor()} opacity-60 text-center`}>          
+            {timer.isFirstTimer 
+              ? `La ronda termina en ${formatTime(timer.minutes, timer.seconds)}` 
+              : timer.isFinished
+              ? 'La partida ha terminado'
+              : `Tiempo extra: ${formatTime(timer.minutes, timer.seconds)} restantes`}
           </div>
-
-        </div>
-
-        {/* Información adicional */}
-        <div className={`mt-8 text-sm md:text-base ${getTextColor()} opacity-60`}>
-          {timer.isFirstTimer 
-            ? `La ronda termina en ${formatTime(timer.minutes, timer.seconds)}` 
-            : timer.isFinished
-            ? 'La partida ha terminado'
-            : `Tiempo extra: ${formatTime(timer.minutes, timer.seconds)} restantes`
-          }
         </div>
       </div>
 
